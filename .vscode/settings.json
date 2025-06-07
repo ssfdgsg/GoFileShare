@@ -1,0 +1,11 @@
+{
+    "background.windowBackgrounds": [
+        "c:/Users/dxy/Desktop/des/wallpaper/**"
+    ],
+    "background.backgroundOpacity": [
+        0.05,
+        0.1,
+        0.1,
+        0.1
+    ]
+}

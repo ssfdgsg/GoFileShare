@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>用户注册</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen">
+    <div class="bg-white p-8 rounded shadow-md w-full max-w-md">
+        <h2 class="text-2xl font-bold text-center text-blue-600 mb-6">注册新账号</h2>
+        <form id="register-form" class="space-y-4">
+            <div>
+                <label for="user" class="block mb-1 text-gray-700">用户名</label>
+                <input type="text" id="user" name="user" required
+                    class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-400">
+            </div>
+            <div>
+                <label for="password" class="block mb-1 text-gray-700">密码</label>
+                <input type="password" id="password" name="password" required
+                    class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-400">
+            </div>
+            <button type="submit"
+                class="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 transition">注册</button>
+        </form>
+        <div id="msg" class="mt-4 text-center text-sm text-red-500"></div>
+        <div class="mt-4 text-center text-sm">
+            已有账号？<a href="/login.html" class="text-blue-600 hover:underline">去登录</a>
+        </div>
+    </div>
+    <script>
+        document.getElementById('register-form').onsubmit = function(e) {
+            e.preventDefault();
+            const user = document.getElementById('user').value.trim();
+            const password = document.getElementById('password').value.trim();
+            const msg = document.getElementById('msg');
+            msg.textContent = '';
+            if (!user || !password) {
+                msg.textContent = '用户名和密码不能为空';
+                return;
+            }
+            const formData = new FormData();
+            formData.append('user', user);
+            formData.append('password', password);
+            fetch('/api/register', {
+                method: 'POST',
+                body: formData
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    msg.classList.remove('text-red-500');
+                    msg.classList.add('text-green-600');
+                    msg.textContent = '注册成功，正在跳转到登录页...';
+                    setTimeout(() => { window.location.href = '/login.html'; }, 1500);
+                } else {
+                    msg.classList.remove('text-green-600');
+                    msg.classList.add('text-red-500');
+                    msg.textContent = data.message || '注册失败';
+                }
+            })
+            .catch(() => {
+                msg.classList.remove('text-green-600');
+                msg.classList.add('text-red-500');
+                msg.textContent = '网络错误，请稍后重试';
+            });
+        }
+    </script>
+</body>
+</html>
