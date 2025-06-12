@@ -12,7 +12,7 @@ var DB *sql.DB
 
 // InitDB 初始化数据库连接
 func InitDB() error {
-	dsn := "root:root@tcp(127.0.0.1:3306)/gotest?charset=utf8mb4&parseTime=True&loc=Local"
+	dsn := "root:200517dong@tcp(47.98.185.85:3306)/gotest?charset=utf8mb4&parseTime=True&loc=Local"
 
 	var err error
 	DB, err = sql.Open("mysql", dsn)

@@ -1,6 +1,9 @@
 package utils
 
-import "context"
+import (
+	"context"
+	"sync"
+)
 
 type WorkerPool struct {
 	workerCount int
