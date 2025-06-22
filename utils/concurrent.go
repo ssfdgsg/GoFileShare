@@ -6,7 +6,7 @@ import (
 )
 
 type WorkerPool struct {
-	workerCount int
+	WorkerCount int
 	taskQueue   chan func()
 	ctx         context.Context
 	cancel      context.CancelFunc
@@ -16,7 +16,7 @@ type WorkerPool struct {
 func NewWorkerPool(workerCount int) *WorkerPool {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &WorkerPool{
-		workerCount: workerCount,
+		WorkerCount: workerCount,
 		taskQueue:   make(chan func(), 100),
 		ctx:         ctx,
 		cancel:      cancel,
@@ -24,7 +24,7 @@ func NewWorkerPool(workerCount int) *WorkerPool {
 }
 
 func (wp *WorkerPool) Start() {
-	for i := 0; i < wp.workerCount; i++ {
+	for i := 0; i < wp.WorkerCount; i++ {
 		wp.wg.Add(1)
 		go wp.worker()
 	}
