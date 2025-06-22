@@ -1,25 +1,19 @@
 package services
 
 import (
+	"GoFileShare/utils"
 	"bufio"
 	"fmt"
 	"github.com/fatih/color"
+	"io"
 	"net/http"
 	"os"
-	"sync"
 )
 
-type ParallelGetTask struct {
-	Url           string
-	FilePath      string       // 文件的最终保存位置
-	Concurrent    int          // 下载并发数
-	TotalSize     int64        // 下载文件的总大小
-	ShardTaskList []*ShardTask // 全部的下载分片任务参数列表
-}
-
 type DownloadTask struct {
-	FilePath     string
+	DownloadIO   utils.FileIOTask
 	OrderId      int
+	FilePath     string
 	DownloadUrl  string
 	RangeStart   int64
 	RangeEnd     int64
@@ -27,6 +21,7 @@ type DownloadTask struct {
 	TaskDone     bool
 	OnComplete   func(*DownloadTask)        // 完成回调
 	OnError      func(*DownloadTask, error) // 错误回调
+	handleError  func(*DownloadTask, error)
 }
 
 var FileTaskHttpServer = http.Client{
@@ -54,7 +49,7 @@ func (DownloadTask *DownloadTask) Execute() {
 	if e != nil {
 		color.Red("Error opening file for task %d: %v", DownloadTask.OrderId, e)
 		color.HiRed("%s", e)
-		DownloadTask.handleError(fmt.Errorf("Break\n"))
+		DownloadTask.handleError(DownloadTask, e)
 		return
 	}
 
@@ -66,7 +61,7 @@ func (DownloadTask *DownloadTask) Execute() {
 	if e != nil {
 		color.Red("Error seeking the file for task %d: %v", DownloadTask.OrderId, e)
 		color.HiRed("%s", e)
-		DownloadTask.handleError(fmt.Errorf("Break\n"))
+		DownloadTask.handleError(DownloadTask, e)
 		return
 	}
 
@@ -74,17 +69,17 @@ func (DownloadTask *DownloadTask) Execute() {
 	if e != nil {
 		color.Red("Error creating request for download task %d: %v", DownloadTask.OrderId, e)
 		color.HiRed("%s", e)
-		DownloadTask.handleError(fmt.Errorf("Break\n"))
+		DownloadTask.handleError(DownloadTask, e)
 		return
 	}
 
-	request.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", task.RangeStart, task.RangeEnd))
+	request.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", DownloadTask.RangeStart, DownloadTask.RangeEnd))
 
 	response, e := FileTaskHttpServer.Do(request)
 	if e != nil {
 		color.Red("Error new request to downloading file for task %d: %v", DownloadTask.OrderId, e)
 		color.HiRed("%s", e)
-		DownloadTask.handleError(fmt.Errorf("Break\n"))
+		DownloadTask.handleError(DownloadTask, e)
 		return
 	}
 
@@ -104,7 +99,7 @@ func (DownloadTask *DownloadTask) Execute() {
 			// 如果读取完毕则退出循环
 			color.Red("Error while reading the %d response", DownloadTask.OrderId)
 			color.HiRed("%s", readError)
-			DownloadTask.handleError(fmt.Errorf("Break\n"))
+			DownloadTask.handleError(DownloadTask, readError)
 			return
 		}
 		if readSize > 0 {
@@ -112,14 +107,14 @@ func (DownloadTask *DownloadTask) Execute() {
 			if writeError != nil {
 				color.Red("Error while writing to file for task %d: %v", DownloadTask.OrderId, writeError)
 				color.HiRed("%s", writeError)
-				DownloadTask.handleError(fmt.Errorf("Break\n"))
+				DownloadTask.handleError(DownloadTask, writeError)
 				return
 			}
-			writeError := writer.Flush()
+			writeError = writer.Flush()
 			if writeError != nil {
 				color.Red("Error while flushing writer for task %d: %v", DownloadTask.OrderId, writeError)
 				color.HiRed("%s", writeError)
-				DownloadTask.handleError(fmt.Errorf("Break\n"))
+				DownloadTask.handleError(DownloadTask, writeError)
 				return
 			}
 		}

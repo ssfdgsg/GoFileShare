@@ -1,38 +1,35 @@
 package services
 
 import (
-    "fmt"
-    "sync"
-    "time"
-    
-    "github.com/fatih/color"
-    "GoFileShare/utils"
+	"GoFileShare/utils"
+	"github.com/fatih/color"
+	"sync"
 )
 
 type DownloadService struct {
-	workerPool *utils.WorkerPool
-	activeJobs map[string]*DownloadTask
+	workerPool    *utils.WorkerPool
+	activeJobs    map[string]*DownloadTask
 	jobsMutex     sync.RWMutex
-    completedJobs int
-    totalJobs     int
-    wg            sync.WaitGroup
+	completedJobs int
+	totalJobs     int
+	wg            sync.WaitGroup
 }
 
 func NewDownloadService(workerCount int) *DownloadService {
 	return &DownloadService{
-		workerPool: utils.NewWorkerPool(workerCount),
-		activeJobs: make(map[string]*DownloadTask),
+		workerPool:    utils.NewWorkerPool(workerCount),
+		activeJobs:    make(map[string]*DownloadTask),
 		completedJobs: 0,
-		totalJobs: 0,
+		totalJobs:     0,
 	}
 }
 
 func (DownloadManager *DownloadService) Start() {
 	DownloadManager.workerPool.Start()
-	color.Green("Download service started with %d workers", DownloadManager.workerPool.workerCount)
+	color.Green("Download service started with %d workers", DownloadManager.workerPool.WorkerCount)
 }
 
-func (DownloadManager *DownloadService) SubmitDownloadTask() {
+func (DownloadManager *DownloadService) SubmitDownloadTask(task *DownloadTask) {
 	task.OnComplete = DownloadManager.onTaskComplete
 	task.OnError = DownloadManager.onTaskError
 
@@ -75,7 +72,7 @@ func (DownloadManager *DownloadService) printProgress() {
 		progress := float64(completedCount) / float64(totalCount) * 100
 		color.Blue("Download progress: %.2f%% (Active: %d, Completed: %d, Total: %d)",
 			progress, activeCount, completedCount, totalCount)
-	}	
+	}
 }
 
 func (DownloadManager *DownloadService) WaitForAll() {
