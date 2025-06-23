@@ -15,6 +15,7 @@ type FileIOTask struct {
 	FilePath      string
 	FileSize      int64
 	DownloadUrl   string
+	OffSet        int64
 	ReadAtOffSet  func()
 	WriteAtOffSet func()
 }
