@@ -1,13 +1,18 @@
 package utils
 
 import (
+	"GoFileShare/services"
 	"archive/zip"
+	"bufio"
 	"crypto/md5"
 	"encoding/hex"
+	"fmt"
 	"github.com/fatih/color"
+	"golang.org/x/net/html/atom"
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 type FileIOTask struct {
@@ -240,4 +245,37 @@ func GetZipFileCount(zipFilePath string) (int, error) {
 		}
 	}
 	return fileCount, nil
+}
+
+func GenerateID() string {
+	// 生成一个简单的唯一ID，可以使用时间戳和随机数
+	return hex.EncodeToString(md5.New().Sum([]byte(filepath.Base(os.TempDir()))))[:16]
+}
+
+func GetStopWork() {
+	file, err := os.OpenFile("./data/stop_work.txt", os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		color.Red("Error opening stop_work.txt: %v", err)
+		return
+	}
+	defer func(file *os.File) {
+		err := file.Close()
+		if err != nil {
+			color.Red("Error closing stop_work.txt: %v", err)
+		}
+	}(file)
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := scanner.Text()
+		lines := strings.Split(line, " ")
+		tempUrl := lines[0]
+		tempFilePath := lines[1]
+		tempStatus := lines[2]
+		Async(services.StartDownload(  tempStatus), func(task *services.DownloadTask) {)
+		}
+
+	if err := scanner.Err(); err != nil {
+		fmt.Println("读取文件出错:", err)
+	}
+
 }

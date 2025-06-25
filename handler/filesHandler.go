@@ -15,20 +15,6 @@ type FileHandler struct {
 	targetDir       string
 }
 
-func NewFileHandler(downloadService *services.DownloadService, uploadService *services.UploadService, tempDir string, targetDir string) *FileHandler {
-	os.MkdirAll(tempDir, 0755)
-	os.MkdirAll(targetDir, 0755)
-
-	metaDir := filepath.Join(tempDir, "metadata")
-	os.MkdirAll(metaDir, 0755)
-	return &FileHandler{
-		downloadService: downloadService,
-		uploadService:   uploadService,
-		tempDir:         tempDir,
-		targetDir:       targetDir,
-	}
-}
-
 func (h *FileHandler) RegisterRoutes(r *gin.Engine) {
 	// 下载API
 	r.POST("/api/download", h.InitDownload)
@@ -47,6 +33,7 @@ func (h *FileHandler) InitDownload(c *gin.Context) {
 		URL       string `json:"url" binding:"required"`
 		FileName  string `json:"fileName"`
 		ChunkSize int64  `json:"chunkSize"`
+		FileSize  int64  `json:"fileSize"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -73,7 +60,7 @@ func (h *FileHandler) InitDownload(c *gin.Context) {
 	}
 
 	filePath := filepath.Join(h.tempDir, req.FileName)
-	downloadTask := services.NewDownloadTask(req.URL, filePath, req.ChunkSize)
+	downloadTask := services.NewDownloadTask(req.URL, filePath, req.ChunkSize, fileSize)
 
 	h.downloadService.AddTask(downloadTask)
 }

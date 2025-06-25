@@ -53,9 +53,9 @@ func SetupRouter() *gin.Engine {
 		// API路由
 		private.GET("/api/username", controllers.GetUserInfo)
 		private.GET("/api/user/:name", controllers.GetUserByName)
-
 		// 注销
 		private.GET("/logout", controllers.Logout)
+
 	}
 
 	return r
