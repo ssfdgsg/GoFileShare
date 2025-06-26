@@ -2,17 +2,22 @@ package services
 
 import (
 	"GoFileShare/models"
+	"GoFileShare/proto"
 	"GoFileShare/utils"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/fatih/color"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/reflection"
 	"io"
 	"math"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 	"time"
 )
@@ -28,20 +33,27 @@ type TransferService struct {
 
 // FileTask 文件传输任务
 type FileTask struct {
-	ID          string
-	URL         string  // 下载URL或上传目标
-	FilePath    string  // 本地文件路径
-	FileName    string  // 文件名
-	FileSize    int64   // 文件大小
-	ChunkSize   int64   // 分块大小
-	ChunkStatus []int64 // 使用数字记录已经完成了多少块，下次开始的时候指针直接偏移
-	Progress    float64
-	Completed   bool
-	TaskType    string // "download" 或 "upload"
-	OnProgress  func(float64)
-	OnComplete  func(*FileTask)
-	OnError     func(*FileTask, error)
-	cancel      chan struct{}
+	ID             string
+	URL            string        // 下载URL或上传目标
+	FilePath       string        // 本地文件路径
+	FileName       string        // 文件名
+	FileSize       int64         // 文件大小
+	ChunkSize      int64         // 分块大小
+	WorkerProgress map[int]int64 // 核心状态：workerID -> 已完成的块数
+	Progress       float64
+	Completed      bool
+	TaskType       string // "download" 或 "upload"
+	OnProgress     func(float64)
+	OnComplete     func(*FileTask)
+	OnError        func(*FileTask, error)
+	cancel         chan struct{}
+}
+
+type UploadTask struct {
+	filePath string
+	fileName string
+	url      string
+	fileSize int64
 }
 
 // NewTransferService 创建传输服务
@@ -82,7 +94,6 @@ func (s *TransferService) Stop() {
 		err := s.saveTaskStatus(task)
 		if err != nil {
 			color.Red("Error saving task status: %v", err)
-			return
 		}
 	}
 }
@@ -96,23 +107,29 @@ func (s *TransferService) GetTaskStatus(taskID string) (*FileTask, bool) {
 	return task, exists
 }
 
-// 保存任务状态
+// saveTaskStatus 保存任务状态
 func (s *TransferService) saveTaskStatus(task *FileTask) error {
-	metaFile := filepath.Join(s.config.MetaDir, task.ID+".json")
+	s.jobsMutex.RLock()
+	_, ok := s.activeJobs[task.ID]
+	s.jobsMutex.RUnlock()
+	if !ok && !task.Completed { // 如果任务不在活动列表且未完成（例如，因错误退出），则不保存
+		return nil
+	}
 
+	metaFile := filepath.Join(s.config.MetaDir, task.ID+".json")
 	metaData := models.TaskMetadata{
-		ID:           task.ID,
-		CreatedTime:  time.Now(),
-		LastModified: time.Now(),
-		FilePath:     task.FilePath,
-		FileName:     task.FileName,
-		TotalSize:    task.FileSize,
-		ChunkSize:    task.ChunkSize,
-		ChunkStatus:  task.ChunkStatus,
-		Progress:     task.Progress,
-		Completed:    task.Completed,
-		TaskType:     task.TaskType,
-		URL:          task.URL,
+		ID:             task.ID,
+		CreatedTime:    time.Now(), // Can be optimized to store initial time
+		LastModified:   time.Now(),
+		FilePath:       task.FilePath,
+		FileName:       task.FileName,
+		TotalSize:      task.FileSize,
+		ChunkSize:      task.ChunkSize,
+		WorkerProgress: task.WorkerProgress, // 保存新的状态
+		Progress:       task.Progress,
+		Completed:      task.Completed,
+		TaskType:       task.TaskType,
+		URL:            task.URL,
 	}
 
 	jsonData, err := json.MarshalIndent(metaData, "", "  ")
@@ -123,15 +140,14 @@ func (s *TransferService) saveTaskStatus(task *FileTask) error {
 	return os.WriteFile(metaFile, jsonData, 0644)
 }
 
-// 加载任务状态
+// loadTaskState 加载任务状态
 func (s *TransferService) loadTaskState(task *FileTask) error {
 	metaFile := filepath.Join(s.config.MetaDir, task.ID+".json")
 	data, err := os.ReadFile(metaFile)
 	if err != nil {
 		if os.IsNotExist(err) {
-			// 文件不存在不是错误，初始化一个新任务
-			chunkCount := int(math.Ceil(float64(task.FileSize) / float64(task.ChunkSize)))
-			task.ChunkStatus = make([]int64, chunkCount)
+			// 文件不存在，初始化一个新的任务状态
+			task.WorkerProgress = make(map[int]int64)
 			return nil
 		}
 		return err
@@ -139,18 +155,20 @@ func (s *TransferService) loadTaskState(task *FileTask) error {
 
 	var meta models.TaskMetadata
 	if err := json.Unmarshal(data, &meta); err != nil {
-		color.Red("Error unmarshalling task metadata for %s: %v", task.ID, err)
 		return err
 	}
 
-	task.ChunkStatus = meta.ChunkStatus
+	// 恢复状态
+	task.WorkerProgress = meta.WorkerProgress
+	if task.WorkerProgress == nil { // 兼容旧的元数据文件
+		task.WorkerProgress = make(map[int]int64)
+	}
 	task.Progress = meta.Progress
 	task.Completed = meta.Completed
-
 	return nil
 }
 
-// 定期保存状态
+// periodicStatusSave 定期保存状态
 func (s *TransferService) periodicStatusSave() {
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
@@ -160,7 +178,9 @@ func (s *TransferService) periodicStatusSave() {
 		case <-ticker.C:
 			s.jobsMutex.RLock()
 			for _, task := range s.activeJobs {
-				err := s.saveTaskStatus(task)
+				// 复制一份以在锁外保存
+				taskCopy := *task
+				err := s.saveTaskStatus(&taskCopy)
 				if err != nil {
 					color.Red("Error saving task status for %s: %v", task.ID, err)
 					return
@@ -175,28 +195,26 @@ func (s *TransferService) periodicStatusSave() {
 
 // AddDownloadTask 添加下载任务
 func (s *TransferService) AddDownloadTask(url, filePath string, onProgress func(float64), onComplete func(*FileTask), onError func(*FileTask, error)) string {
-	// 创建完整的文件路径
 	if err := os.MkdirAll(filepath.Dir(filePath), 0755); err != nil {
+		color.Red("Error creating directory for %s: %s", filePath, err)
 		if onError != nil {
-			color.Red("Error creating directory for %s: %s", filePath, err)
+			onError(nil, err)
 		}
 		return ""
 	}
 
-	// 获取文件大小
 	resp, err := http.Head(url)
 	if err != nil {
+		color.Red("Error HEADing %s: %s", url, err)
 		if onError != nil {
-			color.Red("Error HEADing %s: %s", filePath, err)
+			onError(nil, err)
 		}
 		return ""
 	}
 	defer func(Body io.ReadCloser) {
 		err := Body.Close()
 		if err != nil {
-			if onError != nil {
-				color.Red("Error closing response body: %v", err)
-			}
+			color.Red("Error closing response body for %s: %v", url, err)
 		}
 	}(resp.Body)
 
@@ -216,19 +234,18 @@ func (s *TransferService) AddDownloadTask(url, filePath string, onProgress func(
 		cancel:     make(chan struct{}),
 	}
 
-	// 初始化或加载状态
-	err = s.loadTaskState(task)
-	if err != nil {
-		color.Red("Error saving task status for %s: %v", task.ID, err)
+	if err := s.loadTaskState(task); err != nil {
+		color.Red("Error loading task state for %s: %v", task.ID, err)
+		if onError != nil {
+			onError(task, err)
+		}
 		return ""
 	}
 
-	// 添加到活动任务列表
 	s.jobsMutex.Lock()
 	s.activeJobs[task.ID] = task
 	s.jobsMutex.Unlock()
 
-	// 提交下载任务
 	s.workerPool.Submit(func() {
 		if err := s.processDownload(task); err != nil {
 			if task.OnError != nil {
@@ -238,7 +255,6 @@ func (s *TransferService) AddDownloadTask(url, filePath string, onProgress func(
 			task.OnComplete(task)
 		}
 
-		// 任务完成，从活动列表中移除
 		s.jobsMutex.Lock()
 		delete(s.activeJobs, task.ID)
 		s.jobsMutex.Unlock()
@@ -247,69 +263,9 @@ func (s *TransferService) AddDownloadTask(url, filePath string, onProgress func(
 	return task.ID
 }
 
-// AddUploadTask 添加上传任务
-func (s *TransferService) AddUploadTask(filePath, destination string, onProgress func(float64), onComplete func(*FileTask), onError func(*FileTask, error)) (string, error) {
-	fileInfo, err := os.Stat(filePath)
-	if err != nil {
-		if onError != nil {
-			onError(nil, err)
-		}
-		return "", err
-	}
-
-	task := &FileTask{
-		ID:         fmt.Sprintf("up_%d", time.Now().UnixNano()),
-		URL:        destination,
-		FilePath:   filePath,
-		FileName:   filepath.Base(filePath),
-		FileSize:   fileInfo.Size(),
-		ChunkSize:  s.config.ChunkSize,
-		TaskType:   "upload",
-		OnProgress: onProgress,
-		OnComplete: onComplete,
-		OnError:    onError,
-		cancel:     make(chan struct{}),
-	}
-
-	// 初始化或加载状态
-	err = s.loadTaskState(task)
-	if err != nil {
-		color.Red("Error loading task state for %s: %v", task.ID, err)
-		return "", err
-	}
-
-	// 添加到活动任务列表
-	s.jobsMutex.Lock()
-	s.activeJobs[task.ID] = task
-	s.jobsMutex.Unlock()
-
-	// 提交上传任务
-	s.workerPool.Submit(func() {
-		if err := s.processUpload(task); err != nil {
-			if task.OnError != nil {
-				task.OnError(task, err)
-			}
-		} else if task.OnComplete != nil {
-			task.OnComplete(task)
-		}
-
-		// 任务完成，从活动列表中移除
-		s.jobsMutex.Lock()
-		delete(s.activeJobs, task.ID)
-		s.jobsMutex.Unlock()
-	})
-
-	return task.ID, nil
-}
-
-// 处理下载任务
+// processDownload 处理下载任务
 func (s *TransferService) processDownload(task *FileTask) error {
-	// 确保文件夹存在
-	if err := os.MkdirAll(filepath.Dir(task.FilePath), 0755); err != nil {
-		return err
-	}
-
-	// 创建临时文件
+	// 1. 准备文件
 	tempFile := task.FilePath + ".download"
 	file, err := os.OpenFile(tempFile, os.O_CREATE|os.O_RDWR, 0644)
 	if err != nil {
@@ -321,194 +277,149 @@ func (s *TransferService) processDownload(task *FileTask) error {
 			color.Red("Error closing file %s: %v", tempFile, err)
 		}
 	}(file)
-
-	// 计算块数量
-	chunkCount := int(math.Ceil(float64(task.FileSize) / float64(task.ChunkSize)))
-
-	// 确保文件大小正确
 	if err := file.Truncate(task.FileSize); err != nil {
 		return err
 	}
 
-	// 初始化或加载状态
-	threadStatus := make(map[int]int) // 线程ID -> 最后处理的块索引
-	metaFile := filepath.Join(s.config.MetaDir, task.ID+".json")
-	if data, err := os.ReadFile(metaFile); err == nil {
-		var meta models.TaskMetadata
-		if json.Unmarshal(data, &meta) == nil && meta.ThreadStatus != nil {
-			threadStatus = meta.ThreadStatus
-		}
-	}
+	// 2. 计算任务分配
+	totalChunkCount := int(math.Ceil(float64(task.FileSize) / float64(task.ChunkSize)))
+	workerCount := s.config.WorkerCount
+	chunksPerWorker := totalChunkCount / workerCount
 
-	// 初始化ChunkStatus
-	for index := 0; index < chunkCount; index++ {
-		task.ChunkStatus[index] = int64(threadStatus[index])
-	}
-
-	// 计算已完成块数
-	completedChunks := 0
-	for i := 0; i < len(task.ChunkStatus); i++ {
-		if task.ChunkStatus[i] == '1' {
-			completedChunks++
-		}
-	}
-
-	// 同步机制
+	// 3. 初始化并发控制
 	var wg sync.WaitGroup
 	var progressMutex sync.Mutex
-	errorCh := make(chan error, 1)
-	doneCh := make(chan struct{})
+	errorCh := make(chan error, workerCount) // 缓冲通道，防止worker阻塞
 
-	// 分配块给线程
-	workerCount := s.config.WorkerCount
-	chunksPerWorker := chunkCount / workerCount
-	if chunksPerWorker == 0 {
-		chunksPerWorker = 1
-	}
-
-	// 启动工作线程
+	// 4. 启动所有 workers
 	for workerID := 0; workerID < workerCount; workerID++ {
 		wg.Add(1)
 		go func(workerID int) {
 			defer wg.Done()
 
-			// 计算此线程的块范围
+			// 计算此 worker 的块范围
 			startChunk := workerID * chunksPerWorker
 			endChunk := (workerID + 1) * chunksPerWorker
 			if workerID == workerCount-1 {
-				endChunk = chunkCount // 最后一个线程处理所有剩余块
+				endChunk = totalChunkCount // 最后一个 worker 处理所有剩余的
 			}
 
-			// 如果有保存的状态，从该位置继续
-			if lastProcessed, ok := threadStatus[workerID]; ok && lastProcessed > startChunk {
-				startChunk = lastProcessed + 1
+			// 恢复逻辑：计算此 worker 真正的起始点
+			progressMutex.Lock()
+			completedByThisWorker := task.WorkerProgress[workerID]
+			progressMutex.Unlock()
+
+			// 从上次完成的地方继续
+			resumeStartChunk := startChunk + int(completedByThisWorker)
+
+			if resumeStartChunk < endChunk {
+				color.Green("Worker %d: Resuming from chunk %d (Total for this worker: %d to %d)",
+					workerID, resumeStartChunk, startChunk, endChunk-1)
 			}
 
-			// 用于批量更新的局部变量
-			localCompletedCount := int64(0)
-			updateBatch := make(map[int]int)
-
-			// 处理分配的块
-			for chunkIndex := startChunk; chunkIndex < endChunk; chunkIndex++ {
-				// 检查是否被取消
+			for chunkIndex := resumeStartChunk; chunkIndex < endChunk; chunkIndex++ {
 				select {
 				case <-task.cancel:
-					return
+					return // 任务被取消
 				default:
 				}
 
-				// 计算块的字节范围
-				start := int64(chunkIndex) * task.ChunkSize
-				end := start + task.ChunkSize - 1
-				if end >= task.FileSize {
-					end = task.FileSize - 1
+				// 下载单个块
+				startByte := int64(chunkIndex) * task.ChunkSize
+				endByte := startByte + task.ChunkSize - 1
+				if endByte >= task.FileSize {
+					endByte = task.FileSize - 1
 				}
 
-				// 下载此块
-				err := downloadChunk(task.URL, file, start, end)
+				err := downloadChunk(task.URL, file, startByte, endByte)
 				if err != nil {
 					select {
-					case errorCh <- err:
+					case errorCh <- fmt.Errorf("worker %d failed on chunk %d: %w", workerID, chunkIndex, err):
 					default:
 					}
 					return
 				}
 
-				// 更新状态
-				localCompletedCount++
+				// 更新进度 (在锁内)
+				progressMutex.Lock()
+				task.WorkerProgress[workerID]++
+				var totalCompleted int64
+				for _, count := range task.WorkerProgress {
+					totalCompleted += count
+				}
+				task.Progress = float64(totalCompleted) / float64(totalChunkCount) * 100
+				currentProgress := task.Progress
+				progressMutex.Unlock()
 
-				// 到达更新批次大小或是最后一块时，批量更新状态
-				if localCompletedCount >= 10 || chunkIndex == endChunk-1 {
-					if len(updateBatch) > 0 {
-						progressMutex.Lock()
-
-						// 更新全局完成数量
-						completedChunks += localCompletedCount
-
-						// 更新ChunkStatus
-						task.ChunkStatus[workerID] = localCompletedCount
-
-						// 更新线程状态为最大块索引
-						var maxChunkIndex int
-						for idx := range updateBatch {
-							if idx > maxChunkIndex {
-								maxChunkIndex = idx
-							}
-						}
-						threadStatus[workerID] = maxChunkIndex
-
-						// 更新进度
-						progress := float64(completedChunks) / float64(chunkCount) * 100
-						task.Progress = progress
-
-						// 回调通知进度
-						if task.OnProgress != nil {
-							task.OnProgress(progress)
-						}
-
-						// 判断是否需要保存状态
-						needSave := completedChunks%10 == 0
-
-						progressMutex.Unlock()
-
-						// 锁外保存状态
-						if needSave {
-							s.saveTaskWithThreadStatus(task, threadStatus)
-						}
-
-						// 重置局部计数器和批次
-						localCompletedCount = 0
-						updateBatch = make(map[int]int)
-					}
+				// 在锁外调用回调
+				if task.OnProgress != nil {
+					go task.OnProgress(currentProgress) // 异步调用，防止阻塞
 				}
 			}
 		}(workerID)
 	}
 
-	// 等待所有块下载完成
+	// 5. 等待所有 workers 完成
+	doneCh := make(chan struct{})
 	go func() {
 		wg.Wait()
 		close(doneCh)
 	}()
 
-	// 等待完成或错误
+	// 6. 等待完成或错误
 	select {
 	case err := <-errorCh:
-		// 保存状态以便之后恢复
-		s.saveTaskWithThreadStatus(task, threadStatus)
+		err = s.saveTaskStatus(task)
+		if err != nil {
+			color.Red("Error saving task status after error: %v", err)
+			return err
+		} // 发生错误，保存当前进度
 		return err
 	case <-task.cancel:
-		s.saveTaskWithThreadStatus(task, threadStatus)
-		return errors.New("任务已取消")
-	case <-doneCh:
-		// 检查是否全部完成
-		allComplete := true
-		for _, status := range task.ChunkStatus {
-			if status == 0 {
-				allComplete = false
-				break
-			}
-		}
-		if !allComplete {
-			s.saveTaskWithThreadStatus(task, threadStatus)
-			return errors.New("下载未完成")
-		}
-
-		// 重命名临时文件
-		if err := os.Rename(tempFile, task.FilePath); err != nil {
+		err = s.saveTaskStatus(task)
+		if err != nil {
+			color.Red("Error saving task status on cancel: %v", err)
 			return err
 		}
-
-		task.Completed = true
-		task.Progress = 100
-		if task.OnProgress != nil {
-			task.OnProgress(100)
-		}
-		return nil
+		return errors.New("任务已取消")
+	case <-doneCh:
+		// 全部完成，继续执行
 	}
+
+	// 7. 最终验证和完成
+	var finalCompletedCount int64
+	for _, count := range task.WorkerProgress {
+		finalCompletedCount += count
+	}
+	if finalCompletedCount != int64(totalChunkCount) {
+		err := s.saveTaskStatus(task)
+		if err != nil {
+			color.Red("Error saving task status after final check: %v", err)
+			return err
+		}
+		return fmt.Errorf("下载未完全完成，预期 %d 块，实际完成 %d 块", totalChunkCount, finalCompletedCount)
+	}
+
+	if err := os.Rename(tempFile, task.FilePath); err != nil {
+		return err
+	}
+	task.Completed = true
+	task.Progress = 100
+	if task.OnProgress != nil {
+		task.OnProgress(100)
+	}
+	// 删除元数据文件
+	metaFile := filepath.Join(s.config.MetaDir, task.ID+".json")
+	err = os.Remove(metaFile)
+	if err != nil {
+		color.Red("Error removing metadata file %s: %v", metaFile, err)
+		return err
+	}
+
+	return nil
 }
 
-// 下载单个块的辅助函数
+// downloadChunk 下载单个块的辅助函数
 func downloadChunk(url string, file *os.File, start, end int64) error {
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
@@ -536,7 +447,7 @@ func downloadChunk(url string, file *os.File, start, end int64) error {
 	}
 
 	// 使用新添加的函数从reader直接写入到文件
-	_, err := file.Seek(start, 0)
+	_, err = file.Seek(start, 0)
 	if err != nil {
 		return err
 	}
@@ -545,76 +456,6 @@ func downloadChunk(url string, file *os.File, start, end int64) error {
 		color.Red("Error writing chunk to file: %v", err)
 		return err
 	}
-	if err != nil {
-		color.Red("Error writing chunk to file: %v", err)
-		return err
-	}
-	return nil
-}
-
-// waitForDownloadCompletion 等待下载完成并处理下载结果
-func (s *TransferService) waitForDownloadCompletion(task *FileTask, wg *sync.WaitGroup, errorCh chan error,
-	doneCh chan struct{}, tempFile string) error {
-	// 等待所有块下载完成或出错
-	go func() {
-		wg.Wait()
-		close(doneCh)
-	}()
-
-	// 等待完成或取消
-	select {
-	case err := <-errorCh:
-		return err
-	case <-task.cancel:
-		return errors.New("任务已取消")
-	case <-doneCh:
-		// 检查是否所有块都已完成
-		if strings.Contains(string(task.ChunkStatus), "0") {
-			return errors.New("下载未完成")
-		}
-
-		// 重命名临时文件为最终文件
-		if err := os.Rename(tempFile, task.FilePath); err != nil {
-			return err
-		}
-
-		task.Completed = true
-		task.Progress = 100
-		if task.OnProgress != nil {
-			task.OnProgress(100)
-		}
-
-		return nil
-	}
-}
-
-// 处理上传任务
-func (s *TransferService) processUpload(task *FileTask) error {
-	// 实现文件上传逻辑
-	// 这里使用与下载类似的多块上传方法
-	// 具体实现会根据你的上传目标服务器API有所不同
-
-	file, err := os.Open(task.FilePath)
-	if err != nil {
-		return err
-	}
-	defer func(file *os.File) {
-		err := file.Close()
-		if err != nil {
-			color.Red("Error closing file %s: %v", task.FilePath, err)
-		}
-	}(file)
-
-	// 计算块数量
-	chunkCount := int(math.Ceil(float64(task.FileSize) / float64(task.ChunkSize)))
-
-	// 初始化ChunkStatus，如果为空
-	if len(task.ChunkStatus) == 0 {
-		task.ChunkStatus = make([]int64, chunkCount)
-	}
-	// 这里实现根据ChunkStatus中记录已经完成的位置进行计算
-	// ...
-
 	return nil
 }
 
@@ -629,36 +470,109 @@ func (s *TransferService) CancelTask(taskID string) bool {
 	}
 
 	close(task.cancel)
-	delete(s.activeJobs, taskID)
+	// 不要立即删除，让任务自然退出
 	return true
 }
 
-func (s *TransferService) saveTaskWithThreadStatus(task *FileTask, status map[int]int) {
-	metaFile := filepath.Join(s.config.MetaDir, task.ID+".json")
+type server struct {
+	proto.CallUploadServer
+}
 
-	metaData := models.TaskMetadata{
-		ID:           task.ID,
-		CreatedTime:  time.Now(),
-		LastModified: time.Now(),
-		FilePath:     task.FilePath,
-		FileName:     task.FileName,
-		TotalSize:    task.FileSize,
-		ChunkSize:    task.ChunkSize,
-		ChunkStatus:  task.ChunkStatus,
-		ThreadStatus: status,
-		Progress:     task.Progress,
-		Completed:    task.Completed,
-		TaskType:     task.TaskType,
-		URL:          task.URL,
-	}
+type client struct {
+	proto.CallUploadClient
+}
 
-	jsonData, err := json.MarshalIndent(metaData, "", "  ")
+func listenUploadS() {
+	// 启动 gRPC 服务器，监听上传任务
+	listen, err := net.Listen("tcp", ":18521")
 	if err != nil {
-		color.Red("Error marshalling task metadata for %s: %v", task.ID, err)
+		fmt.Printf("failed to listen: %v", err)
 		return
 	}
-
-	if err := os.WriteFile(metaFile, jsonData, 0644); err != nil {
-		color.Red("Error writing task metadata to %s: %v", metaFile, err)
+	s := grpc.NewServer()
+	proto.RegisterCallUploadServer(s, &server{})
+	reflection.Register(s)
+	defer func() {
+		s.Stop()
+		err := listen.Close()
+		if err != nil {
+			color.Red("Error closing upload server: %v", err)
+			return
+		}
+	}()
+	fmt.Println("Serving 8001...Listen to the file upload task")
+	err = s.Serve(listen)
+	if err != nil {
+		fmt.Printf("failed to serve: %v", err)
+		return
 	}
+}
+
+// callUploads 调用上传函数(Server端)
+func (s *server) callUploadS(fileInfo *proto.FileInfo) (*proto.ErrInfo, error) {
+	// 实现上传逻辑 x
+	var uploadTask UploadTask
+	err := json.Unmarshal([]byte(fileInfo.FileDataJson), &uploadTask)
+	if err != nil {
+		color.Red("Error unmarshalling upload task: %v", err)
+		return nil, err
+	}
+	transferService := NewTransferService(models.TransferConfig{
+		MetaDir:     "meta",      // 元数据目录
+		WorkerCount: 4,           // 并发 worker 数量
+		ChunkSize:   1024 * 1024, // 每块大小，单位：字节
+	})
+	if transferService == nil {
+		return &proto.ErrInfo{ErrStr: "Failed to initialize TransferService"}, errors.New("TransferService initialization failed")
+	}
+	taskID := transferService.AddDownloadTask(uploadTask.url, uploadTask.filePath, onProgress, onComplete, onError)
+	color.Green("Upload task %v successfully", taskID)
+	return &proto.ErrInfo{ErrStr: ""}, nil
+}
+
+// callUploadC 调用上传函数(Client端)
+func callUploadC(task UploadTask, serviceHost string) {
+	conn, err := grpc.NewClient(serviceHost, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		fmt.Println(err)
+	}
+	defer func(conn *grpc.ClientConn) {
+		err := conn.Close()
+		if err != nil {
+			color.Red("Error closing connection: %v", err)
+		}
+	}(conn)
+	taskJson := MakeTaskShareJSON(task.filePath, task.url, task.fileName, task.fileSize)
+	client := proto.NewCallUploadClient(conn)
+	_, err = client.CallUpload(context.Background(), &proto.FileInfo{FileDataJson: taskJson})
+	if err != nil {
+		color.Red("Error saving task status after error: %v", err)
+		return
+	}
+	color.Green("Upload task %v successfully", task.fileName)
+}
+
+// MakeTaskShareJSON 创建用来发送上传任务的JSON
+func MakeTaskShareJSON(filePath, url, fileName string, fileSize int64) []byte {
+	task := UploadTask{fileName: fileName, filePath: filePath, url: url, fileSize: fileSize}
+	outJson, err := json.Marshal(task)
+	if err != nil {
+		color.Red("Error marshalling task json: %v", err)
+	}
+	return outJson
+}
+
+func onProgress(Progress float64) {
+
+	color.Green("Task progress: %.2f%%", Progress)
+
+}
+
+func onComplete(task *FileTask) {
+	color.Green("Task %s completed successfully! File saved to %s", task.ID, task.FilePath)
+}
+
+func onError(task *FileTask, err error) {
+	color.Red("Task %s encountered an error: %v", task.ID, err)
+	color.Red("Error saving task status to file %s: %v", task.FileName, err)
 }

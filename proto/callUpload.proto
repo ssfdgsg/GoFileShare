@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+option go_package = "./proto";
+
+package service;
+
+service callUpload {
+  rpc callUpload (fileInfo) returns (errInfo);
+}
+
+message fileInfo {
+  bytes fileDataJson = 1;
+}
+
+message errInfo {
+  string errStr = 1;
+}

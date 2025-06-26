@@ -8,6 +8,10 @@ import (
 	"GoFileShare/routes"
 )
 
+var (
+	FreePort = 12080 // 默认端口
+)
+
 func main() {
 	// 初始化数据库连接
 	if err := config.InitDB(); err != nil {

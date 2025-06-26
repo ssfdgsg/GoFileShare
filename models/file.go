@@ -18,10 +18,8 @@ func CreateFileRecord(file *File) error {
 
 	_, err := config.DB.Exec(query,
 		file.FileName,
-		file.FileSize, file.FilePath,file.FileUrl,
+		file.FileSize, file.FilePath, file.FileUrl,
 	)
 
 	return err
 }
-
-
