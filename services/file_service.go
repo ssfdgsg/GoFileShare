@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/donnie4w/go-logger/logger"
 	"github.com/fatih/color"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -61,6 +62,7 @@ func NewTransferService(config models.TransferConfig) *TransferService {
 	// 确保元数据目录存在
 	err := os.MkdirAll(config.MetaDir, 0755)
 	if err != nil {
+		logger.Error("Error creating meta directory %s: %v", config.MetaDir, err)
 		color.Red("Error creating meta directory %s: %v", config.MetaDir, err)
 		return nil
 	}
@@ -93,6 +95,7 @@ func (s *TransferService) Stop() {
 	for _, task := range s.activeJobs {
 		err := s.saveTaskStatus(task)
 		if err != nil {
+			logger.Error(err.Error())
 			color.Red("Error saving task status: %v", err)
 		}
 	}
@@ -182,6 +185,7 @@ func (s *TransferService) periodicStatusSave() {
 				taskCopy := *task
 				err := s.saveTaskStatus(&taskCopy)
 				if err != nil {
+					logger.Error("Error saving task status for %s: %v", task.ID, err)
 					color.Red("Error saving task status for %s: %v", task.ID, err)
 					return
 				}
@@ -196,6 +200,7 @@ func (s *TransferService) periodicStatusSave() {
 // AddDownloadTask 添加下载任务
 func (s *TransferService) AddDownloadTask(url, filePath string, onProgress func(float64), onComplete func(*FileTask), onError func(*FileTask, error)) string {
 	if err := os.MkdirAll(filepath.Dir(filePath), 0755); err != nil {
+		logger.Error("Error creating directory for %s: %v", filePath, err)
 		color.Red("Error creating directory for %s: %s", filePath, err)
 		if onError != nil {
 			onError(nil, err)
@@ -205,6 +210,7 @@ func (s *TransferService) AddDownloadTask(url, filePath string, onProgress func(
 
 	resp, err := http.Head(url)
 	if err != nil {
+		logger.Error("Error HEADing %s: %v", url, err)
 		color.Red("Error HEADing %s: %s", url, err)
 		if onError != nil {
 			onError(nil, err)
@@ -214,6 +220,7 @@ func (s *TransferService) AddDownloadTask(url, filePath string, onProgress func(
 	defer func(Body io.ReadCloser) {
 		err := Body.Close()
 		if err != nil {
+			logger.Error("Error closing response body for %s: %v", url, err)
 			color.Red("Error closing response body for %s: %v", url, err)
 		}
 	}(resp.Body)
@@ -235,6 +242,7 @@ func (s *TransferService) AddDownloadTask(url, filePath string, onProgress func(
 	}
 
 	if err := s.loadTaskState(task); err != nil {
+		logger.Error("Error loading task state for %s: %v", task.ID, err)
 		color.Red("Error loading task state for %s: %v", task.ID, err)
 		if onError != nil {
 			onError(task, err)
@@ -274,6 +282,7 @@ func (s *TransferService) processDownload(task *FileTask) error {
 	defer func(file *os.File) {
 		err := file.Close()
 		if err != nil {
+			logger.Error("Error closing file %s: %v", tempFile, err)
 			color.Red("Error closing file %s: %v", tempFile, err)
 		}
 	}(file)
@@ -371,6 +380,7 @@ func (s *TransferService) processDownload(task *FileTask) error {
 	case err := <-errorCh:
 		err = s.saveTaskStatus(task)
 		if err != nil {
+			logger.Error("Error saving task status after error: %v", err)
 			color.Red("Error saving task status after error: %v", err)
 			return err
 		} // 发生错误，保存当前进度
@@ -378,6 +388,7 @@ func (s *TransferService) processDownload(task *FileTask) error {
 	case <-task.cancel:
 		err = s.saveTaskStatus(task)
 		if err != nil {
+			logger.Error("Error saving task status on cancel: %v", err)
 			color.Red("Error saving task status on cancel: %v", err)
 			return err
 		}
@@ -394,6 +405,7 @@ func (s *TransferService) processDownload(task *FileTask) error {
 	if finalCompletedCount != int64(totalChunkCount) {
 		err := s.saveTaskStatus(task)
 		if err != nil {
+			logger.Error("Error saving task status after final check: %v", err)
 			color.Red("Error saving task status after final check: %v", err)
 			return err
 		}
@@ -412,6 +424,7 @@ func (s *TransferService) processDownload(task *FileTask) error {
 	metaFile := filepath.Join(s.config.MetaDir, task.ID+".json")
 	err = os.Remove(metaFile)
 	if err != nil {
+		logger.Error("Error removing metadata file %s: %v", metaFile, err)
 		color.Red("Error removing metadata file %s: %v", metaFile, err)
 		return err
 	}
@@ -437,6 +450,7 @@ func downloadChunk(url string, file *os.File, start, end int64) error {
 	defer func(Body io.ReadCloser) {
 		err := Body.Close()
 		if err != nil {
+			logger.Error("Error closing response body: %v", err)
 			color.Red("Error closing response body: %v", err)
 		}
 	}(resp.Body)
@@ -453,6 +467,7 @@ func downloadChunk(url string, file *os.File, start, end int64) error {
 	}
 	_, err = io.Copy(file, resp.Body)
 	if err != nil {
+		logger.Error("Error writing chunk to file: %v", err)
 		color.Red("Error writing chunk to file: %v", err)
 		return err
 	}
@@ -496,6 +511,7 @@ func listenUploadS() {
 		s.Stop()
 		err := listen.Close()
 		if err != nil {
+			logger.Error("Error closing grpc listener: %v", err)
 			color.Red("Error closing upload server: %v", err)
 			return
 		}
@@ -514,6 +530,7 @@ func (s *server) callUploadS(fileInfo *proto.FileInfo) (*proto.ErrInfo, error) {
 	var uploadTask UploadTask
 	err := json.Unmarshal([]byte(fileInfo.FileDataJson), &uploadTask)
 	if err != nil {
+		logger.Error("Error unmarshalling upload task: %v", err)
 		color.Red("Error unmarshalling upload task: %v", err)
 		return nil, err
 	}
@@ -539,6 +556,7 @@ func callUploadC(task UploadTask, serviceHost string) {
 	defer func(conn *grpc.ClientConn) {
 		err := conn.Close()
 		if err != nil {
+			logger.Error("Error closing connection: %v", err)
 			color.Red("Error closing connection: %v", err)
 		}
 	}(conn)
@@ -546,6 +564,7 @@ func callUploadC(task UploadTask, serviceHost string) {
 	client := proto.NewCallUploadClient(conn)
 	_, err = client.CallUpload(context.Background(), &proto.FileInfo{FileDataJson: taskJson})
 	if err != nil {
+		logger.Error("Error calling upload: %v", err)
 		color.Red("Error saving task status after error: %v", err)
 		return
 	}
@@ -557,6 +576,7 @@ func MakeTaskShareJSON(filePath, url, fileName string, fileSize int64) []byte {
 	task := UploadTask{fileName: fileName, filePath: filePath, url: url, fileSize: fileSize}
 	outJson, err := json.Marshal(task)
 	if err != nil {
+		logger.Error("Error marshalling task json: %v", err)
 		color.Red("Error marshalling task json: %v", err)
 	}
 	return outJson
@@ -573,6 +593,8 @@ func onComplete(task *FileTask) {
 }
 
 func onError(task *FileTask, err error) {
+	logger.Error("Task %s encountered an error: %v", task.ID, err)
+	logger.Error("Error saving task status to file %s: %v", task.FileName, err)
 	color.Red("Task %s encountered an error: %v", task.ID, err)
 	color.Red("Error saving task status to file %s: %v", task.FileName, err)
 }
