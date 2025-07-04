@@ -3,6 +3,8 @@ package config
 import (
 	"database/sql"
 	"fmt"
+	"github.com/fatih/color"
+	"github.com/go-sql-driver/mysql"
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -12,10 +14,16 @@ var DB *sql.DB
 
 // InitDB 初始化数据库连接
 func InitDB() error {
-	dsn := "root:200517dong@tcp(47.98.185.85:3306)/gotest?charset=utf8mb4&parseTime=True&loc=Local"
-
+	cfg := mysql.Config{
+		User:                 "root",
+		Passwd:               "123456",
+		Net:                  "tcp",
+		Addr:                 "127.0.0.1:3306",
+		DBName:               "gotest",
+		AllowNativePasswords: true,
+	}
 	var err error
-	DB, err = sql.Open("mysql", dsn)
+	DB, err = sql.Open("mysql", cfg.FormatDSN())
 	if err != nil {
 		return fmt.Errorf("sql.Open失败: %w", err)
 	}
@@ -24,7 +32,7 @@ func InitDB() error {
 		return fmt.Errorf("数据库连接测试失败: %w", err)
 	}
 
-	fmt.Println("连接MySQL数据库成功~")
+	color.Green("连接MySQL数据库成功~")
 
 	// 设置数据库连接池参数
 	DB.SetMaxOpenConns(10)

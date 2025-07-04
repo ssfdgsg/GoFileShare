@@ -47,7 +47,8 @@ func Exec(f func() interface{}) Future {
 			case <-c:
 
 				return result
-
+			default:
+				return result
 			}
 
 		},
