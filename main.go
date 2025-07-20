@@ -9,7 +9,7 @@ import (
 )
 
 var (
-	FreePort = 12080 // 默认端口
+	FreePort = 8080 // 默认端口
 )
 
 func main() {
@@ -24,14 +24,18 @@ func main() {
 		log.Fatalf("初始化数据表失败: %v", err)
 	}
 
+	if err := config.InitFileDB(); err != nil {
+		log.Fatalf("初始化文件系统链接错误: %v", err)
+	}
+
 	// 设置路由
 	r := routes.SetupRouter()
 
 	// 加载HTML模板
 	r.LoadHTMLGlob("views/*.html")
 
-	fmt.Println("服务器启动在 http://127.0.0.1:8080")
-	if err := r.Run("127.0.0.1:8080"); err != nil {
+	fmt.Println("服务器启动在 http://0.0.0.0:8080")
+	if err := r.Run("0.0.0.0:8080"); err != nil {
 		log.Fatalf("服务器启动失败: %v", err)
 	}
 }

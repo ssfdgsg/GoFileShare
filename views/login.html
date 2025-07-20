@@ -99,18 +99,18 @@
     <script>
         document.getElementById('login-form').addEventListener('submit', function(e) {
             e.preventDefault();
-            
+
             const username = document.getElementById('username').value;
             const password = document.getElementById('password').value;
             const errorMsg = document.getElementById('error-message');
-            
+
             // 简单的前端验证
             if (!username || !password) {
                 errorMsg.style.display = 'block';
                 errorMsg.textContent = '用户名和密码不能为空';
                 return;
             }
-            
+
             const formData = new URLSearchParams();
             formData.append('user', username);
             formData.append('password', password);

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/donnie4w/go-logger/logger"
 	"log"
 	"net"
 	"time"
@@ -77,7 +78,10 @@ func (c *UdpClient) Register(key string) error {
 
 	// 根据修复后的服务端逻辑，可以等待一个确认响应
 	// 设置5秒的读取超时
-	c.conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+	err = c.conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+	if err != nil {
+		return err
+	}
 	buffer := make([]byte, 1024)
 	n, _, err := c.conn.ReadFromUDP(buffer)
 	if err != nil {
@@ -117,7 +121,10 @@ func (c *UdpClient) GetIPByKey(keyToLookup string) (string, error) {
 
 	// 3. 等待服务器响应
 	// 设置5秒的读取超时
-	c.conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+	err = c.conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+	if err != nil {
+		return "", err
+	}
 	buffer := make([]byte, 1024)
 	n, _, err := c.conn.ReadFromUDP(buffer)
 	if err != nil {
@@ -136,7 +143,10 @@ func (c *UdpClient) GetIPByKey(keyToLookup string) (string, error) {
 
 // Close 关闭客户端连接
 func (c *UdpClient) Close() {
-	c.conn.Close()
+	err := c.conn.Close()
+	if err != nil {
+		return
+	}
 }
 
 // getOutboundIP 获取本机的首选出站IP地址
@@ -145,7 +155,12 @@ func getOutboundIP() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer conn.Close()
+	defer func(conn net.Conn) {
+		err := conn.Close()
+		if err != nil {
+			logger.Error("Error while closing connection %v", err)
+		}
+	}(conn)
 
 	localAddr := conn.LocalAddr().(*net.UDPAddr)
 	return localAddr.IP.String(), nil

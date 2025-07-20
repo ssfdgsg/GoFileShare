@@ -4,67 +4,158 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>用户注册</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Microsoft YaHei', sans-serif;
+            background-color: #f5f5f5;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            padding: 0;
+        }
+        .register-container { /* Changed class name for clarity */
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            padding: 30px;
+            width: 350px;
+        }
+        h1 {
+            text-align: center;
+            color: #4b8bf4;
+            margin-bottom: 30px;
+        }
+        .input-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            color: #555;
+        }
+        input[type="text"], input[type="password"], input[type="email"] { /* Added input[type="email"] */
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+            font-size: 16px;
+        }
+        .btn {
+            background-color: #4b8bf4;
+            color: white;
+            border: none;
+            padding: 12px;
+            width: 100%;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s;
+        }
+        .btn:hover {
+            background-color: #3a7ad5;
+        }
+        .error-message {
+            color: #f44336;
+            text-align: center;
+            margin-bottom: 20px;
+            display: none;
+        }
+        .login-link { /* Changed class name for clarity */
+            text-align: center;
+            margin-top: 20px;
+        }
+        .login-link a {
+            color: #4b8bf4;
+            text-decoration: none;
+        }
+        .login-link a:hover {
+            text-decoration: underline;
+        }
+    </style>
 </head>
-<body class="bg-gray-100 flex items-center justify-center min-h-screen">
-    <div class="bg-white p-8 rounded shadow-md w-full max-w-md">
-        <h2 class="text-2xl font-bold text-center text-blue-600 mb-6">注册新账号</h2>
-        <form id="register-form" class="space-y-4">
-            <div>
-                <label for="user" class="block mb-1 text-gray-700">用户名</label>
-                <input type="text" id="user" name="user" required
-                    class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-400">
-            </div>
-            <div>
-                <label for="password" class="block mb-1 text-gray-700">密码</label>
-                <input type="password" id="password" name="password" required
-                    class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-400">
-            </div>
-            <button type="submit"
-                class="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 transition">注册</button>
-        </form>
-        <div id="msg" class="mt-4 text-center text-sm text-red-500"></div>
-        <div class="mt-4 text-center text-sm">
-            已有账号？<a href="/login.html" class="text-blue-600 hover:underline">去登录</a>
+<body>
+<div class="register-container">
+    <h1>用户注册</h1>
+    <div id="error-message" class="error-message"></div>
+    <form id="register-form">
+        <div class="input-group">
+            <label for="username">用户名</label>
+            <input type="text" id="username" name="user" placeholder="请输入用户名" required>
         </div>
+        <div class="input-group">
+            <label for="password">密码</label>
+            <input type="password" id="password" name="password" placeholder="请输入密码" required>
+        </div>
+        <div class="input-group">
+            <label for="email">邮箱 (可选)</label> <!-- Added email input -->
+            <input type="email" id="email" name="email" placeholder="请输入邮箱">
+        </div>
+        <button type="submit" class="btn">注册</button>
+    </form>
+    <div class="login-link">
+        已有账号？ <a href="/login.html">立即登录</a>
     </div>
-    <script>
-        document.getElementById('register-form').onsubmit = function(e) {
-            e.preventDefault();
-            const user = document.getElementById('user').value.trim();
-            const password = document.getElementById('password').value.trim();
-            const msg = document.getElementById('msg');
-            msg.textContent = '';
-            if (!user || !password) {
-                msg.textContent = '用户名和密码不能为空';
-                return;
-            }
-            const formData = new FormData();
-            formData.append('user', user);
-            formData.append('password', password);
-            fetch('/api/register', {
-                method: 'POST',
-                body: formData
+</div>
+
+<script>
+    document.getElementById('register-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+
+        const username = document.getElementById('username').value;
+        const password = document.getElementById('password').value;
+        const email = document.getElementById('email').value; // Get email value
+        const errorMsg = document.getElementById('error-message');
+
+        // 简单的前端验证
+        if (!username || !password) {
+            errorMsg.style.display = 'block';
+            errorMsg.textContent = '用户名和密码不能为空';
+            return;
+        }
+
+        const formData = new URLSearchParams();
+        formData.append('user', username);
+        formData.append('password', password);
+        formData.append('email', email); // Append email to form data
+
+        // 发送请求到后端
+        fetch('/api/register', { // Make sure this path is correct in your router
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'Accept': 'application/json'
+            },
+            body: formData
+        })
+            .then(response => {
+                if (response.ok) {
+                    return response.json();
+                }
+                // Handle non-OK responses
+                return response.json().then(errData => {
+                    throw new Error(errData.message || '注册失败');
+                }).catch(() => {
+                    throw new Error('注册失败，服务器返回错误 ' + response.status);
+                });
             })
-            .then(res => res.json())
             .then(data => {
                 if (data.status === 'success') {
-                    msg.classList.remove('text-red-500');
-                    msg.classList.add('text-green-600');
-                    msg.textContent = '注册成功，正在跳转到登录页...';
-                    setTimeout(() => { window.location.href = '/login.html'; }, 1500);
+                    alert(data.message + "，即将跳转到登录页。");
+                    window.location.href = '/login.html'; // 注册成功后跳转到登录页
                 } else {
-                    msg.classList.remove('text-green-600');
-                    msg.classList.add('text-red-500');
-                    msg.textContent = data.message || '注册失败';
+                    errorMsg.style.display = 'block';
+                    errorMsg.textContent = data.message || '注册失败';
                 }
             })
-            .catch(() => {
-                msg.classList.remove('text-green-600');
-                msg.classList.add('text-red-500');
-                msg.textContent = '网络错误，请稍后重试';
+            .catch(error => {
+                console.error('Register request failed:', error);
+                errorMsg.style.display = 'block';
+                errorMsg.textContent = error.message;
             });
-        }
-    </script>
+    });
+</script>
 </body>
 </html>

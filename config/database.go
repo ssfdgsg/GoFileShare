@@ -1,26 +1,32 @@
 package config
 
 import (
+	"GoFileShare/utils"
 	"database/sql"
 	"fmt"
 	"github.com/fatih/color"
 	"github.com/go-sql-driver/mysql"
-	"time"
-
 	_ "github.com/go-sql-driver/mysql"
+	"time"
 )
 
 var DB *sql.DB
 
 // InitDB 初始化数据库连接
 func InitDB() error {
+	dbHost := utils.GetEnv("DB_HOST", "127.0.0.1") // 默认是本地，方便开发
+	dbPort := utils.GetEnv("DB_PORT", "3306")
+	dbUser := utils.GetEnv("DB_USER", "root")
+	dbPassword := utils.GetEnv("DB_PASSWORD", "123456") // 注意：这是你原来的密码
+	dbName := utils.GetEnv("DB_NAME", "gotest")
 	cfg := mysql.Config{
-		User:                 "root",
-		Passwd:               "123456",
+		User:                 dbUser,
+		Passwd:               dbPassword,
 		Net:                  "tcp",
-		Addr:                 "127.0.0.1:3306",
-		DBName:               "gotest",
+		Addr:                 dbHost + ":" + dbPort,
+		DBName:               dbName,
 		AllowNativePasswords: true,
+		ParseTime:            true,
 	}
 	var err error
 	DB, err = sql.Open("mysql", cfg.FormatDSN())
@@ -64,4 +70,17 @@ func CloseDB() {
 	if DB != nil {
 		DB.Close()
 	}
+}
+
+func AuthCheck(AuthLevel int, FileNodes []FileNode) ([]FileNode, error) {
+	var filteredNodes []FileNode
+	for _, node := range FileNodes {
+		if node.EffectiveAuthLevel <= AuthLevel {
+			filteredNodes = append(filteredNodes, node)
+		}
+	}
+	if len(filteredNodes) == 0 {
+		return nil, nil // 没有符合条件的节点
+	}
+	return filteredNodes, nil
 }

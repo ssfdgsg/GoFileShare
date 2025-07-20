@@ -259,3 +259,10 @@ func GenerateID() string {
 	// 生成一个简单的唯一ID，可以使用时间戳和随机数
 	return hex.EncodeToString(md5.New().Sum([]byte(filepath.Base(os.TempDir()))))[:16]
 }
+
+func GetEnv(key, fallback string) string {
+	if value, ok := os.LookupEnv(key); ok {
+		return value
+	}
+	return fallback
+}

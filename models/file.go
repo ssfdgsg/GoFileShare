@@ -101,6 +101,30 @@ func SearchFileNodeByID(nodeID primitive.ObjectID) ([]config.FileNode, error) {
 	return results, nil
 }
 
+// SearchFileNodeByParentID 在数据库中根据父节点ID搜索文件节点
+func SearchFileNodeByParentID(parentID primitive.ObjectID) ([]config.FileNode, error) {
+	filter := map[string]interface{}{"parent_id": parentID}
+	cursor, err := config.FileCollection.Find(context.TODO(), filter)
+	if err != nil {
+		return nil, err
+	}
+	defer func(cursor *mongo.Cursor, ctx context.Context) {
+		err := cursor.Close(ctx)
+		if err != nil {
+			color.Red("failed to close cursor: %v", err)
+			log.Fatalf("failed to close cursor: %v", err)
+			return
+		}
+	}(cursor, context.TODO())
+
+	var results []config.FileNode
+	if err = cursor.All(context.TODO(), &results); err != nil {
+		return nil, err
+	}
+
+	return results, nil
+}
+
 // SearchFileNodeByName 在数据库中根据名称搜索文件节点
 func SearchFileNodeByName(name string) ([]config.FileNode, error) {
 	filter := map[string]interface{}{"name": name}

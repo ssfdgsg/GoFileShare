@@ -55,7 +55,11 @@ func SetupRouter() *gin.Engine {
 		private.GET("/api/user/:name", controllers.GetUserByName)
 		// 注销
 		private.GET("/logout", controllers.Logout)
-
+		// 文件操作
+		private.POST("/api/InitDownloadTask/:ID", controllers.InitDownloadTask)
+		private.GET("/api/listFileDirByName/:ID", controllers.ListFileDirByID)
+		private.PUT("/api/downloadFile/:ID", controllers.StartDownload)
+		private.PUT("/api/updateFile/:ID", controllers.StartUpload)
 	}
 
 	return r
