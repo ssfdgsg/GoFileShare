@@ -4,6 +4,7 @@ import (
 	"GoFileShare/config"
 	"GoFileShare/utils"
 	"context"
+	"fmt"
 	"github.com/fatih/color"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -11,10 +12,21 @@ import (
 )
 
 // AddFileNode 添加文件节点到数据库
-func AddFileNode(path string, name string, nodeType bool, parentID string, authLevel *int) error {
-	parentObjID, err := config.ParseObjectID(parentID)
-	if err != nil {
-		return err
+func AddFileNode(path string, name string, nodeType bool, parentID string, authLevel int) error {
+	var parentObjID primitive.ObjectID
+	if parentID == "" || parentID == "root" || parentID == "undefined" || parentID == "null" {
+		// 根目录，使用零值 ObjectID
+		parentObjID = primitive.NilObjectID
+	} else if primitive.IsValidObjectID(parentID) {
+		// 合法 ObjectID
+		var err error
+		parentObjID, err = primitive.ObjectIDFromHex(parentID)
+		if err != nil {
+			return err
+		}
+	} else {
+		// 非法 ID，返回错误
+		return fmt.Errorf("无效的父节点ID: %s", parentID)
 	}
 
 	fileNode := &config.FileNode{
@@ -23,14 +35,13 @@ func AddFileNode(path string, name string, nodeType bool, parentID string, authL
 		Name:               name,
 		Type:               nodeType,
 		Path:               path,
-		AuthLevel:          authLevel,
-		EffectiveAuthLevel: 0,
+		EffectiveAuthLevel: authLevel,
 		Storage: &config.StorageLocation{
 			SystemFilePath: config.GetSystemFilePath(path, config.RootPath),
 		},
 	}
 
-	_, err = config.FileCollection.InsertOne(context.TODO(), fileNode)
+	_, err := config.FileCollection.InsertOne(context.TODO(), fileNode)
 	return err
 }
 

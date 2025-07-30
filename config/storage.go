@@ -1,12 +1,15 @@
 package config
 
 import (
+	//"GoFileShare/models"
 	"context"
 	"github.com/donnie4w/go-logger/logger"
 	"github.com/fatih/color"
+	//"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
+	//"net/http"
 	"os"
 )
 
@@ -18,23 +21,23 @@ type StorageLocation struct {
 // FileNode 代表一个逻辑上的文件或文件夹节点
 type FileNode struct {
 	// --- 核心标识与层级 ---
-	ID                 primitive.ObjectID `bson:"_id,omitempty"`
-	ParentID           primitive.ObjectID `bson:"parent_id,omitempty"` // 逻辑上的父节点ID，根节点此项为空
-	Type               bool               `bson:"type"`                // 节点类型: "file":false 或 "directory":true
-	Name               string             `bson:"name"`                // 用户看到的、在当前层级下的名称，如 "report.pdf" 或 "documents"
-	Path               string             `bson:"path"`
-	AuthLevel          *int               `bson:"auth_level,omitempty"` // 权限级别，表示当前节点的权限要求，用指针表示父节点,nil表示继承父节点权限，0表示无权限
-	EffectiveAuthLevel int                `bson:"effective_auth_level"` //查询时访问的值
-	Storage            *StorageLocation   `bson:"storage,omitempty"`    // 存储位置，指向具体的存储节点'
+	ID       primitive.ObjectID `bson:"_id,omitempty"`
+	ParentID primitive.ObjectID `bson:"parent_id,omitempty"` // 逻辑上的父节点ID，根节点此项为空
+	Type     bool               `bson:"type"`                // 节点类型: "file":false 或 "directory":true
+	Name     string             `bson:"name"`                // 用户看到的、在当前层级下的名称，如 "report.pdf" 或 "documents"
+	Path     string             `bson:"path"`
+	//AuthLevel          *int               `bson:"auth_level,omitempty"` // 权限级别，表示当前节点的权限要求，用指针表示父节点,nil表示继承父节点权限，0表示无权限
+	EffectiveAuthLevel int              `bson:"effective_auth_level"` //查询时访问的值
+	Storage            *StorageLocation `bson:"storage,omitempty"`    // 存储位置，指向具体的存储节点'
 }
 
 var FileClient *mongo.Client
 var FileCollection *mongo.Collection
-var RootPath = "/GoFileShare/data" // 根目录路径
+var RootPath = "." // 根目录路径
 
 func InitFileDB() error {
 	var err error
-	FileClient, err = mongo.Connect(context.TODO(), options.Client().ApplyURI("mongodb://localhost:27017"))
+	FileClient, err = mongo.Connect(context.TODO(), options.Client().ApplyURI("mongodb://admin:123456@localhost:27017"))
 	if err != nil {
 		logger.Fatal(err)
 		color.Red("Fail to connect to MongoDB: %v", err)
@@ -49,6 +52,7 @@ func InitFileDB() error {
 	FileCollection = FileClient.Database("GoFileShare").Collection("FileDir")
 
 	color.Green("Connected to MongoDB successfully.")
+
 	return nil
 }
 

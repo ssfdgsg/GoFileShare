@@ -2,17 +2,15 @@ package controllers
 
 import (
 	"GoFileShare/config"
-	"fmt"
-	"go.mongodb.org/mongo-driver/bson/primitive"
-	"mime/multipart"
-	"net/http"
-	"path/filepath"
-	"time"
-
 	"GoFileShare/models"
-
+	"fmt"
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
+	"go.mongodb.org/mongo-driver/bson/primitive"
+	"net/http"
+	"os"
+	"path/filepath"
+	"time"
 )
 
 // ShowHomePage 显示主页
@@ -92,6 +90,46 @@ func ListFilesByName(c *gin.Context, name string) {
 		c.JSON(http.StatusOK, gin.H{
 			"error": err.Error(),
 		})
+	}
+	checkedFileNodes, err := config.AuthCheck(authLevel.(int), fileNodes)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"files": checkedFileNodes,
+	})
+}
+
+// ListFileDirByName 根据文件名列出文件目录
+func ListFileDirByName(c *gin.Context) {
+	session := sessions.Default(c)
+	username := session.Get("user")
+	authLevel := session.Get("authLevel")
+	if username == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error": "未登录",
+		})
+		return
+	}
+
+	name := c.Param("NAME")
+	if name == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "缺少文件名",
+		})
+		return
+	}
+
+	fileNodes, err := models.SearchFileNodeByName(name)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"error": err.Error() + "搜索文件名失败！",
+		})
+		return
 	}
 	checkedFileNodes, err := config.AuthCheck(authLevel.(int), fileNodes)
 	if err != nil {
@@ -238,16 +276,19 @@ func StartDownload(c *gin.Context) {
 func StartUpload(c *gin.Context) {
 	session := sessions.Default(c)
 	username := session.Get("user")
-	authLevel := session.Get("auth_level")
+
+	// 统一使用 authLevel 作为键名（与登录函数保持一致）
+	authLevel := session.Get("authLevel")
+
 	if username == nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "未登录"})
 		return
 	}
 
-	nodeID := c.Param("id")
-	if nodeID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "缺少文件节点ID"})
-		return
+	auth, ok := authLevel.(int)
+	if !ok {
+		// 权限默认为0（普通用户）
+		auth = 0
 	}
 
 	// 获取上传的文件
@@ -256,48 +297,39 @@ func StartUpload(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "获取文件失败"})
 		return
 	}
-	defer func(file multipart.File) {
-		err := file.Close()
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "关闭文件失败"})
-			return
-		}
-	}(file)
+	defer file.Close()
 
-	objID, err := primitive.ObjectIDFromHex(nodeID)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的文件节点ID"})
-		return
-	}
-
-	fileNode, err := models.SearchFileNodeByID(objID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
-	if len(fileNode) != 1 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "文件系统错误，请检查文件ID"})
-		return
-	}
-
-	// 构建文件保存路径
 	fileName := header.Filename
-	uploadPath := filepath.Join(fileNode[0].Path, fileName)
+	filePath := filepath.Join(config.RootPath, "FileStore", fileName)
 
-	// 保存文件到磁盘
-	err = c.SaveUploadedFile(header, uploadPath)
-	if err != nil {
+	// 确保目录存在
+	if err := os.MkdirAll(filepath.Dir(filePath), 0755); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "创建目录失败"})
+		return
+	}
+
+	// 从URL参数获取父目录ID
+	parentID := c.Param("NAME")
+	if parentID == "" || parentID == "undefined" || parentID == "null" {
+		parentID = "root"
+	}
+
+	// 保存上传的文件
+	if err := c.SaveUploadedFile(header, filePath); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "保存文件失败"})
 		return
 	}
 
-	// 添加文件节点到数据库
-	err = models.AddFileNode(uploadPath, fileName, false, fileNode[0].ID.Hex(), authLevel.(*int))
+	// 文件保存成功后添加节点记录
+	err = models.AddFileNode(filePath, fileName, false, parentID, auth)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "添加文件节点失败"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "添加文件节点失败: " + err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"status": "success", "filename": fileName})
+	c.JSON(http.StatusOK, gin.H{
+		"status":   "success",
+		"filename": fileName,
+		"message":  "文件上传成功",
+	})
 }

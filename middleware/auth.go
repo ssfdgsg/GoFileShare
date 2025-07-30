@@ -13,7 +13,7 @@ func AuthRequired() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		session := sessions.Default(c)
 		user := session.Get("user")
-
+		
 		fmt.Printf("AuthRequired检查，用户: %v\n", user)
 
 		if user == nil {

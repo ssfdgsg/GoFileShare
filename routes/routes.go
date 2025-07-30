@@ -23,7 +23,7 @@ func SetupRouter() *gin.Engine {
 		Secure:   false,        // 生产环境设置为true（需要HTTPS）
 		Path:     "/",          // 确保cookie在整个站点有效
 	})
-	r.Use(sessions.Sessions("mysession", store))
+	r.Use(sessions.Sessions("session", store))
 
 	// Ping测试
 	r.GET("/ping", func(c *gin.Context) {
@@ -57,9 +57,9 @@ func SetupRouter() *gin.Engine {
 		private.GET("/logout", controllers.Logout)
 		// 文件操作
 		private.POST("/api/InitDownloadTask/:ID", controllers.InitDownloadTask)
-		private.GET("/api/listFileDirByName/:ID", controllers.ListFileDirByID)
-		private.PUT("/api/downloadFile/:ID", controllers.StartDownload)
-		private.PUT("/api/updateFile/:ID", controllers.StartUpload)
+		private.GET("/api/listFileDirByName/:NAME", controllers.ListFileDirByName)
+		private.POST("/api/downloadFile/:ID", controllers.StartDownload)
+		private.POST("/api/updateFile/:ID", controllers.StartUpload)
 	}
 
 	return r

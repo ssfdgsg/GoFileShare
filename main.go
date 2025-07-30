@@ -1,7 +1,10 @@
 package main
 
 import (
+	"GoFileShare/models"
 	"fmt"
+	"github.com/donnie4w/go-logger/logger"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"log"
 
 	"GoFileShare/config"
@@ -26,6 +29,21 @@ func main() {
 
 	if err := config.InitFileDB(); err != nil {
 		log.Fatalf("初始化文件系统链接错误: %v", err)
+	} else {
+		log.Println("初始化文件系统成功")
+	}
+	var RootAuthLevel int
+	RootAuthLevel = 100
+
+	result, err := models.SearchFileNodeByName("root")
+	if err != nil {
+		log.Fatal(err)
+	}
+	if len(result) == 0 {
+		err := models.AddFileNode("./FileStore", "root", false, primitive.NewObjectID().String(), RootAuthLevel)
+		if err != nil {
+			logger.Fatal(err)
+		}
 	}
 
 	// 设置路由
