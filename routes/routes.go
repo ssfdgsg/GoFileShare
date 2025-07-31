@@ -56,10 +56,16 @@ func SetupRouter() *gin.Engine {
 		// 注销
 		private.GET("/logout", controllers.Logout)
 		// 文件操作
-		private.POST("/api/InitDownloadTask/:ID", controllers.InitDownloadTask)
-		private.GET("/api/listFileDirByName/:NAME", controllers.ListFileDirByName)
-		private.POST("/api/downloadFile/:ID", controllers.StartDownload)
-		private.POST("/api/updateFile/:ID", controllers.StartUpload)
+		private.POST("/api/InitDownloadTask/:id", controllers.InitDownloadTask)
+		private.GET("/api/listFileDirByName/:name", controllers.ListFileDirByName)
+		private.GET("/api/downloadFile/:id", controllers.StartDownload) // 改为GET方法
+		private.POST("/api/updateFile/:id", controllers.StartUpload)
+		private.GET("/api/listFileDirByID/:id", controllers.ListFileDirByID)
+		private.POST("/api/updateDir/:id", controllers.UpdateDir)
+		// 搜索功能
+		private.GET("/api/searchFiles", controllers.SearchFiles)
+		// 删除功能
+		private.DELETE("/api/deleteFile/:id", controllers.DeleteFile)
 	}
 
 	return r

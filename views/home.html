@@ -89,6 +89,20 @@
             gap: 0.5rem;
         }
 
+        .search-box {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            flex: 1;
+        }
+
+        .search-box input {
+            flex: 1;
+            padding: 0.5rem;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+
         .breadcrumb {
             background: white;
             padding: 0.5rem 1rem;
@@ -253,10 +267,14 @@
 
 <div class="container">
     <div class="toolbar">
-        <button class="btn btn-primary" onclick="showUploadModal()">📤 上传文件</button>
-        <button class="btn btn-secondary" onclick="createFolder()">📁 新建文件夹</button>
         <div class="file-upload">
             <input type="file" id="fileInput" multiple style="display: none;" onchange="uploadFiles()">
+            <button class="btn btn-primary" onclick="showUploadModal()">📤 上传文件</button>
+            <button class="btn btn-primary" onclick="showCreateFolderModal()">📁 新建文件夹</button>
+        </div>
+        <div class="search-box">
+            <input type="text" placeholder="搜索文件..." onkeypress="if(event.key==='Enter') searchFiles()">
+            <button class="btn btn-secondary" onclick="searchFiles()">🔍 搜索</button>
         </div>
     </div>
 
@@ -286,6 +304,24 @@
     </div>
 </div>
 
+<!-- 创建文件夹模态框 -->
+<div id="createFolderModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>新建文件夹</h3>
+            <span class="close" onclick="closeCreateFolderModal()">&times;</span>
+        </div>
+        <div>
+            <label for="folderNameInput">文件夹名称:</label>
+            <input type="text" id="folderNameInput" placeholder="请输入文件夹名称" style="width: 100%; padding: 0.5rem; margin: 0.5rem 0; border: 1px solid #ccc; border-radius: 4px;">
+            <div style="text-align: right; margin-top: 1rem;">
+                <button class="btn btn-secondary" onclick="closeCreateFolderModal()">取消</button>
+                <button class="btn btn-primary" onclick="createFolder()">创建</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
     let currentFolderId = 'root';
     let fileList = [];
@@ -299,7 +335,7 @@
     // 加载文件列表
     async function loadFileList(folderId) {
         try {
-            const response = await fetch(`/api/listFileDirByName/${folderId}`);
+            const response = await fetch(`/api/listFileDirByID/${folderId}`);
             const data = await response.json();
 
             if (data.error) {
@@ -379,6 +415,16 @@
         document.getElementById('uploadModal').style.display = 'none';
         document.getElementById('progressBar').style.display = 'none';
         document.getElementById('progressFill').style.width = '0%';
+    }
+
+    // 显示创建文件夹模态框
+    function showCreateFolderModal() {
+        document.getElementById('createFolderModal').style.display = 'block';
+    }
+
+    // 关闭创建文件夹模态框
+    function closeCreateFolderModal() {
+        document.getElementById('createFolderModal').style.display = 'none';
     }
 
     // 设置拖拽上传
@@ -475,10 +521,33 @@
     // 下载文件
     async function downloadFile(fileId) {
         try {
-            window.open(`/api/downloadFile/${fileId}`, '_blank');
+            // 创建一个隐藏的下载链接
+            const downloadUrl = `/api/downloadFile/${fileId}`;
+            const link = document.createElement('a');
+            link.href = downloadUrl;
+            link.download = ''; // 强制下载而不是预览
+            link.style.display = 'none';
+
+            // 添加到页面并触发点击
+            document.body.appendChild(link);
+            link.click();
+
+            // 清理
+            document.body.removeChild(link);
         } catch (error) {
             console.error('下载失败:', error);
             alert('下载失败');
+        }
+    }
+
+    // 预览文件
+    function previewFile(fileId) {
+        try {
+            // 在新窗口中预览文件
+            window.open(`/api/downloadFile/${fileId}`, '_blank');
+        } catch (error) {
+            console.error('预览失败:', error);
+            alert('预览失败');
         }
     }
 
@@ -487,34 +556,102 @@
         if (!confirm('确定要删除这个文件吗？')) return;
 
         try {
-            // 这里需要实现删除API
-            alert('删除功能待实现');
+            const response = await fetch(`/api/deleteFile/${fileId}`, {
+                method: 'DELETE'
+            });
+
+            const result = await response.json();
+
+            if (result.error) {
+                alert('删除失败: ' + result.error);
+            } else {
+                alert('删除成功: ' + result.name);
+                // 刷新当前文件列表
+                loadFileList(currentFolderId);
+            }
         } catch (error) {
             console.error('删除失败:', error);
             alert('删除失败');
         }
     }
 
-    // 预览文件
-    function previewFile(fileId) {
-        // 这里可以实现文件预览功能
-        downloadFile(fileId);
+    // 创建文件夹
+    async function createFolder() {
+        const folderName = document.getElementById('folderNameInput').value.trim();
+
+        if (!folderName) {
+            alert('文件夹名称不能为空');
+            return;
+        }
+
+        try {
+            const formData = new FormData();
+            formData.append('addDirName', folderName);
+
+            const response = await fetch(`/api/updateDir/${currentFolderId}`, {
+                method: 'POST',
+                body: formData
+            });
+
+            const result = await response.json();
+
+            if (result.error) {
+                alert('创建文件夹失败: ' + result.error);
+            } else {
+                alert('文件夹创建成功');
+                document.getElementById('folderNameInput').value = '';
+                closeCreateFolderModal();
+                loadFileList(currentFolderId);
+            }
+        } catch (error) {
+            console.error('创建文件夹失败:', error);
+            alert('创建文件夹失败');
+        }
     }
 
-    // 创建文件夹
-    function createFolder() {
-        const folderName = prompt('请输入文件夹名称:');
-        if (!folderName) return;
+    // 搜索文件
+    async function searchFiles() {
+        const searchInput = document.querySelector('.search-box input');
+        const searchTerm = searchInput.value.trim();
 
-        // 这里需要实现创建文件夹API
-        alert('创建文件夹功能待实现');
+        if (!searchTerm) {
+            alert('请输入搜索关键词');
+            return;
+        }
+
+        try {
+            const response = await fetch(`/api/searchFiles?q=${encodeURIComponent(searchTerm)}`);
+            const data = await response.json();
+
+            if (data.error) {
+                alert('搜索失败: ' + data.error);
+                return;
+            }
+
+            fileList = data.files || [];
+            renderFileList();
+
+            // 更新面包屑显示搜索结果
+            const breadcrumb = document.getElementById('breadcrumb');
+            breadcrumb.innerHTML = `
+                <a href="#" onclick="navigateToFolder('root')">🏠 根目录</a>
+                / <span>搜索结果: "${searchTerm}"</span>
+            `;
+
+        } catch (error) {
+            console.error('搜索失败:', error);
+            alert('搜索失败');
+        }
     }
 
     // 点击模态框外部关闭
     window.onclick = function(event) {
-        const modal = document.getElementById('uploadModal');
-        if (event.target === modal) {
+        const uploadModal = document.getElementById('uploadModal');
+        const createFolderModal = document.getElementById('createFolderModal');
+        if (event.target === uploadModal) {
             closeUploadModal();
+        } else if (event.target === createFolderModal) {
+            closeCreateFolderModal();
         }
     }
 </script>

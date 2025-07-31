@@ -116,7 +116,7 @@ func ListFileDirByName(c *gin.Context) {
 		return
 	}
 
-	name := c.Param("NAME")
+	name := c.Param("name")
 	if name == "" {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": "缺少文件名",
@@ -148,7 +148,7 @@ func ListFileDirByName(c *gin.Context) {
 func ListFileDirByID(c *gin.Context) {
 	session := sessions.Default(c)
 	username := session.Get("user")
-	authLevel := session.Get("auth_level")
+	authLevel := session.Get("authLevel") // 统一使用 authLevel
 	if username == nil {
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"error": "未登录",
@@ -156,10 +156,33 @@ func ListFileDirByID(c *gin.Context) {
 		return
 	}
 
+	// 安全地获取权限等级
+	auth, ok := authLevel.(int)
+	if !ok {
+		// 如果获取失败，默认为0（普通用户）
+		auth = 0
+	}
+
 	nodeID := c.Param("id")
-	if nodeID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "缺少文件节点ID",
+	if nodeID == "" || nodeID == "root" {
+		// 如果是根目录，获取所有父节点为nil的文件
+		fileNodes, err := models.SearchFileNodeByParentID(primitive.NilObjectID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": err.Error(),
+			})
+			return
+		}
+		checkedFileNodes, err := config.AuthCheck(auth, fileNodes)
+		if err != nil {
+			c.JSON(http.StatusOK, gin.H{
+				"error": err.Error(),
+			})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"files": checkedFileNodes,
 		})
 		return
 	}
@@ -172,14 +195,15 @@ func ListFileDirByID(c *gin.Context) {
 		return
 	}
 
-	fileNodes, err := models.SearchFileNodeByID(objID)
+	// 根据父节点ID获取子文件和文件夹
+	fileNodes, err := models.SearchFileNodeByParentID(objID)
 	if err != nil {
-		c.JSON(http.StatusOK, gin.H{
+		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": err.Error(),
 		})
 		return
 	}
-	checkedFileNodes, err := config.AuthCheck(authLevel.(int), fileNodes)
+	checkedFileNodes, err := config.AuthCheck(auth, fileNodes)
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"error": err.Error(),
@@ -190,17 +214,23 @@ func ListFileDirByID(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"files": checkedFileNodes,
 	})
-
 }
 
 // InitDownloadTask 初始化下载任务
 func InitDownloadTask(c *gin.Context) {
 	session := sessions.Default(c)
 	username := session.Get("user")
-	authLevel := session.Get("auth_level")
+	authLevel := session.Get("authLevel") // 统一使用 authLevel
 	if username == nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "未登录"})
 		return
+	}
+
+	// 安全地获取权限等级
+	auth, ok := authLevel.(int)
+	if !ok {
+		// 如果获取失败，默认为0（普通用户）
+		auth = 0
 	}
 
 	nodeID := c.Param("id")
@@ -221,7 +251,7 @@ func InitDownloadTask(c *gin.Context) {
 		return
 	}
 
-	downloadTask, err := config.AuthCheck(authLevel.(int), fileNode)
+	downloadTask, err := config.AuthCheck(auth, fileNode)
 	if err != nil {
 		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
 		return
@@ -234,10 +264,17 @@ func InitDownloadTask(c *gin.Context) {
 func StartDownload(c *gin.Context) {
 	session := sessions.Default(c)
 	username := session.Get("user")
-	authLevel := session.Get("auth_level")
+	authLevel := session.Get("authLevel") // 统一使用 authLevel
 	if username == nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "未登录"})
 		return
+	}
+
+	// 安全地获取权限等级
+	auth, ok := authLevel.(int)
+	if !ok {
+		// 如果获取失败，默认为0（普通用户）
+		auth = 0
 	}
 
 	nodeID := c.Param("id")
@@ -258,7 +295,7 @@ func StartDownload(c *gin.Context) {
 		return
 	}
 
-	downloadTask, err := config.AuthCheck(authLevel.(int), fileNode)
+	downloadTask, err := config.AuthCheck(auth, fileNode)
 	if err != nil {
 		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
 		return
@@ -309,7 +346,7 @@ func StartUpload(c *gin.Context) {
 	}
 
 	// 从URL参数获取父目录ID
-	parentID := c.Param("NAME")
+	parentID := c.Param("id")
 	if parentID == "" || parentID == "undefined" || parentID == "null" {
 		parentID = "root"
 	}
@@ -331,5 +368,152 @@ func StartUpload(c *gin.Context) {
 		"status":   "success",
 		"filename": fileName,
 		"message":  "文件上传成功",
+	})
+}
+
+// UpdateDir创建文件夹
+func UpdateDir(c *gin.Context) {
+	session := sessions.Default(c)
+	username := session.Get("user")
+	authLevel := session.Get("authLevel")
+	if username == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "未登录"})
+		return
+	}
+
+	// 从URL参数获取父目录ID
+	parentID := c.Param("id")
+	if parentID == "" || parentID == "undefined" || parentID == "null" {
+		parentID = "root"
+	}
+
+	addDirName := c.PostForm("addDirName")
+	if addDirName == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "缺少文件夹名称"})
+		return
+	}
+
+	auth, ok := authLevel.(int)
+	if !ok {
+		auth = 0
+	}
+
+	err := models.AddFileNode("", addDirName, true, parentID, auth)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "创建文件夹失败: " + err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"status":  "success",
+		"message": "文件夹创建成功",
+		"name":    addDirName,
+	})
+}
+
+// SearchFiles 搜索文件
+func SearchFiles(c *gin.Context) {
+	session := sessions.Default(c)
+	username := session.Get("user")
+	authLevel := session.Get("authLevel")
+	if username == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "未登录"})
+		return
+	}
+
+	// 安全地获取权限等级
+	auth, ok := authLevel.(int)
+	if !ok {
+		auth = 0
+	}
+
+	// 获取搜索关键词
+	searchTerm := c.Query("q")
+	if searchTerm == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "缺少搜索关键词"})
+		return
+	}
+
+	// 调用模型层的搜索函数
+	fileNodes, err := models.SearchFileNodeByNamePattern(searchTerm)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "搜索失败: " + err.Error()})
+		return
+	}
+
+	// 权限检查
+	checkedFileNodes, err := config.AuthCheck(auth, fileNodes)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "权限检查失败: " + err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"files": checkedFileNodes,
+		"count": len(checkedFileNodes),
+		"query": searchTerm,
+	})
+}
+
+// DeleteFile 删除文件或文件夹
+func DeleteFile(c *gin.Context) {
+	session := sessions.Default(c)
+	username := session.Get("user")
+	authLevel := session.Get("authLevel")
+	if username == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "未登录"})
+		return
+	}
+
+	// 安全地获取权限等级
+	auth, ok := authLevel.(int)
+	if !ok {
+		auth = 0
+	}
+
+	nodeID := c.Param("id")
+	if nodeID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "缺少文件节点ID"})
+		return
+	}
+
+	objID, err := primitive.ObjectIDFromHex(nodeID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的文件节点ID"})
+		return
+	}
+
+	// 首先查找文件节点
+	fileNodes, err := models.SearchFileNodeByID(objID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "查找文件失败: " + err.Error()})
+		return
+	}
+
+	if len(fileNodes) == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "文件不存在"})
+		return
+	}
+
+	fileNode := fileNodes[0]
+
+	// 权限检查
+	checkedFileNodes, err := config.AuthCheck(auth, []config.FileNode{fileNode})
+	if err != nil || len(checkedFileNodes) == 0 {
+		c.JSON(http.StatusForbidden, gin.H{"error": "权限不足，无法删除此文件"})
+		return
+	}
+
+	// 删除文件节点和所有子节点（如果是文件夹）
+	err = models.DeleteFileNodeWithChildren(nodeID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "删除文件节点失败: " + err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"status":  "success",
+		"message": "删除成功",
+		"name":    fileNode.Name,
 	})
 }

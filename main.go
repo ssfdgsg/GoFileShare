@@ -1,14 +1,14 @@
 package main
 
 import (
+	"GoFileShare/config"
 	"GoFileShare/models"
+	"GoFileShare/routes"
 	"fmt"
 	"github.com/donnie4w/go-logger/logger"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"log"
-
-	"GoFileShare/config"
-	"GoFileShare/routes"
+	_ "net/http/pprof"
 )
 
 var (
