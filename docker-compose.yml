@@ -1,51 +1,83 @@
 services:
-  # 这是你的 Go 应用服务
   app:
-    # 使用你项目中的 Dockerfile进行构建
     build: .
-    container_name: go-app-service
+    container_name: goFileShare
     restart: on-failure
     ports:
-      # 将你主机的 8080 端口映射到容器的 8080 端口
-      # 如果你的 Go 应用监听其他端口，请修改这里的第二个 8080
       - "8080:8080"
     environment:
-      # 这里设置的环境变量，会被Go代码中的 os.Getenv() 读取
-      - DB_HOST=db         # 关键！主机名就是下面的数据库服务名'db'
+      # MySQL 配置
+      - DB_HOST=db
       - DB_PORT=3306
       - DB_USER=root
-      - DB_PASSWORD=123456 # 这是你代码里原来的密码
+      - DB_PASSWORD=123456
       - DB_NAME=gotest
+      # MongoDB 配置
+      - MONGO_HOST=filedb
+      - MONGO_PORT=27017
+      - MONGO_DATABASE=filestore
     depends_on:
-      # 告诉 Docker，app服务依赖于db服务
-      # 它会等db容器启动后，再启动app容器
       db:
         condition: service_healthy
+      filedb:
+        condition: service_healthy
+    networks:
+      - app-network
 
-  # 这是 MySQL 数据库服务
   db:
-    image: mysql:latest
+    image: mysql:8.0
     container_name: mysql-db-service
     restart: always
     environment:
-      # 这些是 MySQL 镜像自身需要的环境变量
-      - MYSQL_ROOT_PASSWORD=123456  # 设置root用户的密码
-      - MYSQL_DATABASE=gotest       # MySQL启动时会自动创建这个数据库
+      - MYSQL_ROOT_PASSWORD=123456
+      - MYSQL_DATABASE=gotest
+      - MYSQL_CHARSET=utf8mb4
+      - MYSQL_COLLATION=utf8mb4_unicode_ci
     ports:
-      # 将主机的 3307 端口映射到容器的 3306 端口
-      # 我用了 3307 是为了避免和你主机上已有的 3306 冲突
-      # 你也可以用 "3306:3306"，但要确保主机 3306 端口没被占用
-      - "3307:3306"
+      - "3307:3306"  # 外部访问端口映射
     volumes:
-      # 数据持久化，将数据库文件保存在主机上，防止容器删除后数据丢失
       - mysql-data:/var/lib/mysql
+      - ./init-scripts:/docker-entrypoint-initdb.d  # 可选：初始化脚本
     healthcheck:
-      # 健康检查，确保数据库真正准备好接受连接了
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p123456"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 30s
+    networks:
+      - app-network
 
-# 定义一个具名卷，用于数据持久化
+  filedb:
+    image: mongo:6.0
+    container_name: mongo-db-service
+    restart: always
+    environment:
+      # 可选：设置MongoDB认证
+      - MONGO_INITDB_ROOT_USERNAME=admin
+      - MONGO_INITDB_ROOT_PASSWORD=123456
+      - MONGO_INITDB_DATABASE=filestore
+    ports:
+      - "27017:27017"  # 外部访问端口映射
+    volumes:
+      - mongo-data:/data/db
+      - mongo-config:/data/configdb
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - app-network
+
 volumes:
   mysql-data:
+    driver: local
+  mongo-data:
+    driver: local
+  mongo-config:
+    driver: local
+
+networks:
+  app-network:
+    driver: bridge

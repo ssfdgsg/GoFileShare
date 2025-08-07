@@ -1,15 +1,14 @@
 package config
 
 import (
-	//"GoFileShare/models"
 	"context"
+	"fmt"
 	"github.com/donnie4w/go-logger/logger"
 	"github.com/fatih/color"
-	//"github.com/gin-gonic/gin"
+	"github.com/joho/godotenv"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
-	//"net/http"
 	"os"
 )
 
@@ -24,7 +23,7 @@ type FileNode struct {
 	ID       primitive.ObjectID `bson:"_id,omitempty" json:"_id"`
 	ParentID primitive.ObjectID `bson:"parent_id,omitempty" json:"parent_id"`
 	Type     bool               `bson:"type" json:"type"` // 节点类型: "file":false 或 "directory":true
-	Name     string             `bson:"name" json:"name"` // 用户看到的、在当前层级下的名称，如 "report.pdf" 或 "documents"
+	Name     string             `bson:"name" json:"name"` // 用户看到的、在当前层级下的名称，�� "report.pdf" 或 "documents"
 	Path     string             `bson:"path" json:"path"`
 	//AuthLevel          *int               `bson:"auth_level,omitempty"` // 权限级别，表示当前节点的权限要求，用指针表示父节点,nil表示继承父节点权限，0表示无权限
 	EffectiveAuthLevel int              `bson:"effective_auth_level" json:"auth_level"`     //查询时访问的值，前端显示为auth_level
@@ -36,8 +35,25 @@ var FileCollection *mongo.Collection
 var RootPath = "." // 根目录路径
 
 func InitFileDB() error {
+	// 加载 .env 文件
+	if err := godotenv.Load(); err != nil {
+		logger.Fatal("加载 .env 文件失败: ", err)
+		return fmt.Errorf("加载 .env 文件失败: %w", err)
+	}
+
 	var err error
-	FileClient, err = mongo.Connect(context.TODO(), options.Client().ApplyURI("mongodb://admin:123456@localhost:27017"))
+	mongoUser := os.Getenv("MONGO_USER")
+	mongoPassword := os.Getenv("MONGO_PASSWORD")
+	mongoHost := os.Getenv("MONGO_HOST")
+	mongoPort := os.Getenv("MONGO_PORT")
+
+	if mongoUser == "" || mongoPassword == "" || mongoHost == "" || mongoPort == "" {
+		logger.Fatal("MongoDB环境变量未正确设置: MONGO_USER, MONGO_PASSWORD, MONGO_HOST, MONGO_PORT")
+		return fmt.Errorf("MongoDB环境变量未正确设置")
+	}
+
+	connectURL := "mongodb://" + mongoUser + ":" + mongoPassword + "@" + mongoHost + ":" + mongoPort
+	FileClient, err = mongo.Connect(context.TODO(), options.Client().ApplyURI(connectURL))
 	if err != nil {
 		logger.Fatal(err)
 		color.Red("Fail to connect to MongoDB: %v", err)

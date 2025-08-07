@@ -260,6 +260,7 @@
             <span>欢迎, {{.username}}</span>
             <span>|</span>
             <span>登录时间: {{.loginTime}}</span>
+            <a href="/p2p-debug" class="btn btn-primary">P2P调试</a>
             <a href="/logout" class="btn btn-secondary">退出登录</a>
         </div>
     </div>
@@ -575,7 +576,7 @@
         }
     }
 
-    // 创建文件夹
+    // 创建文件��
     async function createFolder() {
         const folderName = document.getElementById('folderNameInput').value.trim();
 

@@ -4,15 +4,14 @@ import (
 	"GoFileShare/config"
 	"GoFileShare/models"
 	"GoFileShare/routes"
+	"GoFileShare/services"
 	"fmt"
 	"github.com/donnie4w/go-logger/logger"
+	"github.com/joho/godotenv"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"log"
 	_ "net/http/pprof"
-)
-
-var (
-	FreePort = 8080 // 默认端口
+	"os"
 )
 
 func main() {
@@ -35,6 +34,11 @@ func main() {
 	var RootAuthLevel int
 	RootAuthLevel = 100
 
+	err := godotenv.Load("./.env")
+	if err != nil {
+		log.Fatalf("加载配置文件失败: %v", err)
+	}
+
 	result, err := models.SearchFileNodeByName("root")
 	if err != nil {
 		log.Fatal(err)
@@ -43,6 +47,25 @@ func main() {
 		err := models.AddFileNode("./FileStore", "root", false, primitive.NewObjectID().String(), RootAuthLevel)
 		if err != nil {
 			logger.Fatal(err)
+		}
+	}
+
+	// 初始化P2P客户端
+	serverAddr := os.Getenv("P2P_SERVER_IP") + ":" + os.Getenv("P2P_SERVER_PORT")
+	err = services.InitP2PClient(serverAddr)
+	if err != nil {
+		log.Printf("P2P客户端初始化失败: %v", err)
+	} else {
+		// 注册到P2P服务器
+		p2pClient := services.GetGlobalP2PClient()
+		if p2pClient != nil {
+			// 修复调用，移除多余的参数
+			err = p2pClient.Register()
+			if err != nil {
+				log.Printf("P2P注册失败: %v", err)
+			} else {
+				log.Println("P2P客户端注册成功")
+			}
 		}
 	}
 

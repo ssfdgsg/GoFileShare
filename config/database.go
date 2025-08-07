@@ -14,7 +14,7 @@ var DB *sql.DB
 
 // InitDB 初始化数据库连接
 func InitDB() error {
-	dbHost := utils.GetEnv("DB_HOST", "127.0.0.1") // 默认是本地，方便开发
+	dbHost := utils.GetEnv("DB_HOST", "localhost") // 默认是本地，方便开发
 	dbPort := utils.GetEnv("DB_PORT", "3306")
 	dbUser := utils.GetEnv("DB_USER", "root")
 	dbPassword := utils.GetEnv("DB_PASSWORD", "123456") // 注意：这是你原来的密码
