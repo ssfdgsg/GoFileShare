@@ -42,17 +42,21 @@ func InitFileDB() error {
 	}
 
 	var err error
+	mongoURL := os.Getenv("MONGO_URL")
 	mongoUser := os.Getenv("MONGO_USER")
 	mongoPassword := os.Getenv("MONGO_PASSWORD")
 	mongoHost := os.Getenv("MONGO_HOST")
 	mongoPort := os.Getenv("MONGO_PORT")
 
-	if mongoUser == "" || mongoPassword == "" || mongoHost == "" || mongoPort == "" {
+	if mongoURL == "" && (mongoUser == "" || mongoPassword == "" || mongoHost == "" || mongoPort == "") {
 		logger.Fatal("MongoDB环境变量未正确设置: MONGO_USER, MONGO_PASSWORD, MONGO_HOST, MONGO_PORT")
 		return fmt.Errorf("MongoDB环境变量未正确设置")
 	}
 
 	connectURL := "mongodb://" + mongoUser + ":" + mongoPassword + "@" + mongoHost + ":" + mongoPort
+	if mongoURL != "" {
+		connectURL = mongoURL
+	}
 	FileClient, err = mongo.Connect(context.TODO(), options.Client().ApplyURI(connectURL))
 	if err != nil {
 		logger.Fatal(err)

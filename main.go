@@ -15,6 +15,10 @@ import (
 )
 
 func main() {
+	err := godotenv.Load(".env")
+	if err != nil {
+		log.Fatalf("加载配置文件失败: %v", err)
+	}
 	// 初始化数据库连接
 	if err := config.InitDB(); err != nil {
 		log.Fatalf("初始化数据库失败: %v", err)
@@ -33,11 +37,6 @@ func main() {
 	}
 	var RootAuthLevel int
 	RootAuthLevel = 100
-
-	err := godotenv.Load("./.env")
-	if err != nil {
-		log.Fatalf("加载配置文件失败: %v", err)
-	}
 
 	result, err := models.SearchFileNodeByName("root")
 	if err != nil {

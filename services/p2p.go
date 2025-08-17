@@ -174,7 +174,7 @@ func (c *EnhancedUdpClient) Register() error {
 	return fmt.Errorf("注册失败: %s", response.Status)
 }
 
-// 连接到目标客户端
+// ConnectToPeer 连接到目标客户端
 func (c *EnhancedUdpClient) ConnectToPeer(targetKey string) error {
 	// 1. 查询目标客户端信息
 	targetInfo, err := c.queryPeerInfo(targetKey)
