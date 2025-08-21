@@ -27,15 +27,15 @@ func UserExists(username string) (bool, error) {
 }
 
 // CreateUser 创建新用户
-func CreateUser(username, password string) error {
-	_, err := config.DB.Exec("INSERT INTO user(name, password) VALUES(?, ?)", username, password)
+func CreateUser(username, password, email string) error {
+	_, err := config.DB.Exec("INSERT INTO user(name, password, email,status) VALUES(?, ?, ?, ?)", username, password, email, 100)
 	return err
 }
 
 // ValidateUser 验证用户登录
 func ValidateUser(username, password string) (bool, error) {
 	var count int
-	err := config.DB.QueryRow("SELECT COUNT(*) FROM user WHERE name = ? AND password = ?", username, password).Scan(&count)
+	err := config.DB.QueryRow("SELECT COUNT(*) FROM user WHERE name = ? AND password = ? ", username, password).Scan(&count)
 	if err != nil {
 		return false, err
 	}

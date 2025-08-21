@@ -7,6 +7,7 @@
 
 # Test binary, built with `go test -c`
 *.test
+*.bat
 
 # Output of the go build process
 *.out
@@ -31,6 +32,9 @@ go.work
 .Trashes
 ehthumbs.db
 Thumbs.db
+.env
+*.env
+
 
 # Logs
 *.log
@@ -47,6 +51,7 @@ coverage/
 # Temporary folders
 tmp/
 temp/
+FileStore/
 
 # Build output
 dist/

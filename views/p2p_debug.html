@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>P2P调试界面</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .log-container {
+            background-color: #1a1a1a;
+            color: #00ff00;
+            font-family: 'Courier New', monospace;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .status-connected {
+            background-color: #10b981;
+        }
+        .status-disconnected {
+            background-color: #ef4444;
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <div class="container mx-auto px-4 py-8">
+        <!-- 头部导航 -->
+        <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+            <div class="flex justify-between items-center">
+                <h1 class="text-3xl font-bold text-gray-800">P2P调试界面</h1>
+                <div class="flex space-x-4">
+                    <a href="/home" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">返回主页</a>
+                    <a href="/logout" class="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600">退出登录</a>
+                </div>
+            </div>
+            <p class="text-gray-600 mt-2">当前用户: <span class="font-semibold">{{.username}}</span></p>
+        </div>
+
+        <!-- P2P状态显示 -->
+        <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+            <h2 class="text-xl font-bold mb-4">P2P连接状态</h2>
+            <div class="flex items-center space-x-4">
+                <div id="statusIndicator" class="w-4 h-4 rounded-full status-disconnected"></div>
+                <span id="statusText" class="text-gray-700">检查中...</span>
+                <button id="refreshStatus" class="bg-blue-500 text-white px-3 py-1 rounded text-sm hover:bg-blue-600">刷新状态</button>
+            </div>
+        </div>
+
+        <!-- P2P操作面板 -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+            <!-- 注册密钥 -->
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <h3 class="text-lg font-bold mb-4">注册到P2P服务器</h3>
+                <div class="space-y-4">
+                    <button id="registerBtn"
+                            class="w-full bg-green-500 text-white py-3 rounded-lg hover:bg-green-600 font-semibold">
+                        注册到服务器
+                    </button>
+                    <div id="clientInfo" class="hidden p-3 bg-gray-100 rounded-lg">
+                        <p class="text-sm text-gray-600">客户端信息:</p>
+                        <div id="clientInfoDetails" class="font-mono text-sm"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 连接P2P节点 -->
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <h3 class="text-lg font-bold mb-4">连接P2P节点</h3>
+                <div class="space-y-4">
+                    <input type="text" id="connectKey" placeholder="输入要连接的节点密钥"
+                           class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <button id="connectBtn"
+                            class="w-full bg-blue-500 text-white py-3 rounded-lg hover:bg-blue-600 font-semibold">
+                        连接节点
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- P2P消息发送 -->
+        <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+            <h3 class="text-lg font-bold mb-4">发送P2P消息</h3>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <input type="text" id="messageTargetKey" placeholder="目标节点密钥"
+                       class="p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <input type="text" id="messageContent" placeholder="消息内容"
+                       class="p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <button id="sendMessageBtn"
+                        class="bg-purple-500 text-white py-3 rounded-lg hover:bg-purple-600 font-semibold">
+                    发送消息
+                </button>
+            </div>
+        </div>
+
+        <!-- P2P连接列表 -->
+        <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-bold">P2P连接列表</h3>
+                <button id="refreshConnections" class="bg-gray-500 text-white px-3 py-1 rounded text-sm hover:bg-gray-600">刷新连接</button>
+            </div>
+            <div id="connectionsList" class="space-y-2">
+                <div class="text-gray-500 text-center py-4">暂无P2P连接</div>
+            </div>
+        </div>
+
+        <!-- 操作日志 -->
+        <div class="bg-white rounded-lg shadow-md p-6">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-bold">操作日志</h3>
+                <button id="clearLog" class="bg-gray-500 text-white px-3 py-1 rounded text-sm hover:bg-gray-600">清空日志</button>
+            </div>
+            <div id="logContainer" class="log-container p-4 rounded-lg h-64 overflow-y-auto">
+                <div class="text-green-400">[系统] P2P调试界面已加载</div>
+            </div>
+        </div>
+
+        <!-- 快速操作 -->
+        <div class="bg-white rounded-lg shadow-md p-6 mt-6">
+            <h3 class="text-lg font-bold mb-4">快速操作</h3>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <button id="autoRegister" class="bg-yellow-500 text-white py-2 px-4 rounded hover:bg-yellow-600">
+                    自动注册
+                </button>
+                <button id="testConnection" class="bg-indigo-500 text-white py-2 px-4 rounded hover:bg-indigo-600">
+                    测试连接
+                </button>
+                <button id="showHelp" class="bg-gray-500 text-white py-2 px-4 rounded hover:bg-gray-600">
+                    帮助说明
+                </button>
+                <button id="exportLog" class="bg-orange-500 text-white py-2 px-4 rounded hover:bg-orange-600">
+                    导出日志
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 全局变量
+        let logMessages = [];
+
+        // 工具函数
+        function addLog(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            const colorClass = {
+                'info': 'text-green-400',
+                'error': 'text-red-400',
+                'warning': 'text-yellow-400',
+                'success': 'text-blue-400'
+            }[type] || 'text-green-400';
+
+            const logEntry = `<div class="${colorClass}">[${timestamp}] ${message}</div>`;
+            logMessages.push(logEntry);
+
+            const container = document.getElementById('logContainer');
+            container.innerHTML += logEntry;
+            container.scrollTop = container.scrollHeight;
+        }
+
+        // 更新P2P状态
+        async function updateP2PStatus() {
+            try {
+                const response = await fetch('/api/p2p/status');
+                const data = await response.json();
+
+                const indicator = document.getElementById('statusIndicator');
+                const statusText = document.getElementById('statusText');
+
+                if (data.connected) {
+                    indicator.className = 'w-4 h-4 rounded-full status-connected';
+                    statusText.textContent = '已连接 - ' + data.message;
+                    addLog('P2P状态: 已连接', 'success');
+                } else {
+                    indicator.className = 'w-4 h-4 rounded-full status-disconnected';
+                    statusText.textContent = '未连接 - ' + data.message;
+                    addLog('P2P状态: 未连接', 'error');
+                }
+            } catch (error) {
+                addLog('获取P2P状态失败: ' + error.message, 'error');
+            }
+        }
+
+        // 注册到P2P服务器
+        async function registerToServer() {
+            try {
+                addLog('正在注册到P2P服务器...', 'info');
+                const formData = new FormData();
+                formData.append('key', 'dummy'); // 服务器端会忽略这个参数
+
+                const response = await fetch('/api/p2p/register', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    addLog('服务器注册成功', 'success');
+                    // 显示客户端信息
+                    const clientInfoDiv = document.getElementById('clientInfo');
+                    const clientInfoDetails = document.getElementById('clientInfoDetails');
+
+                    if (data.client_info) {
+                        clientInfoDetails.innerHTML = `
+                            密钥: ${data.client_info.client_key}<br>
+                            本地IP: ${data.client_info.local_ip}:${data.client_info.local_port}<br>
+                            外部IP: ${data.client_info.external_ip}:${data.client_info.external_port}<br>
+                            NAT类型: ${data.client_info.nat_type || '未知'}
+                        `;
+                        clientInfoDiv.classList.remove('hidden');
+                    }
+                } else {
+                    addLog(`服务器注册失败: ${data.error || data.message}`, 'error');
+                }
+            } catch (error) {
+                addLog('注册请求失败: ' + error.message, 'error');
+            }
+        }
+
+        // 连接P2P节点
+        async function connectPeer() {
+            const targetKey = document.getElementById('connectKey').value.trim();
+            if (!targetKey) {
+                addLog('请输入目标节点密钥', 'warning');
+                return;
+            }
+
+            try {
+                addLog(`正在连接节点: ${targetKey}`, 'info');
+                const formData = new FormData();
+                formData.append('target_key', targetKey);
+
+                const response = await fetch('/api/p2p/connect', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    addLog(`成功连接到节点: ${targetKey}`, 'success');
+                    document.getElementById('connectKey').value = '';
+                    // 刷新连接列表
+                    refreshConnections();
+                } else {
+                    addLog(`连接失败: ${data.error || data.message}`, 'error');
+                }
+            } catch (error) {
+                addLog('连接请求失败: ' + error.message, 'error');
+            }
+        }
+
+        // 发送P2P消息
+        async function sendMessage() {
+            const targetKey = document.getElementById('messageTargetKey').value.trim();
+            const message = document.getElementById('messageContent').value.trim();
+
+            if (!targetKey || !message) {
+                addLog('请输入目标密钥和消息内容', 'warning');
+                return;
+            }
+
+            try {
+                addLog(`发送消息给 ${targetKey}: ${message}`, 'info');
+                const formData = new FormData();
+                formData.append('target_key', targetKey);
+                formData.append('message', message);
+
+                const response = await fetch('/api/p2p/send', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    addLog(`消息发送成功到 ${targetKey}`, 'success');
+                    document.getElementById('messageTargetKey').value = '';
+                    document.getElementById('messageContent').value = '';
+                } else {
+                    addLog(`消息发送失败: ${data.error || data.message}`, 'error');
+                }
+            } catch (error) {
+                addLog('发送消息失败: ' + error.message, 'error');
+            }
+        }
+
+        // 刷新连接列表
+        async function refreshConnections() {
+            try {
+                const response = await fetch('/api/p2p/connections');
+                const data = await response.json();
+
+                const connectionsList = document.getElementById('connectionsList');
+
+                if (response.ok && data.connections && Object.keys(data.connections).length > 0) {
+                    let connectionsHtml = '';
+                    for (const [key, conn] of Object.entries(data.connections)) {
+                        connectionsHtml += `
+                            <div class="bg-gray-50 p-3 rounded-lg border">
+                                <div class="flex justify-between items-start">
+                                    <div>
+                                        <p class="font-semibold">${key}</p>
+                                        <p class="text-sm text-gray-600">外部: ${conn.RemoteExternalIP}:${conn.RemoteExternalPort}</p>
+                                        <p class="text-sm text-gray-600">��地: ${conn.RemoteLocalIP}:${conn.RemoteLocalPort}</p>
+                                    </div>
+                                    <div class="text-right">
+                                        <span class="text-xs px-2 py-1 rounded ${conn.IsConnected ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">
+                                            ${conn.IsConnected ? '已连接' : '未连接'}
+                                        </span>
+                                        <button onclick="quickSendMessage('${key}')" class="ml-2 text-xs bg-blue-500 text-white px-2 py-1 rounded hover:bg-blue-600">
+                                            发消息
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    }
+                    connectionsList.innerHTML = connectionsHtml;
+                    addLog(`刷新连接列表: ${Object.keys(data.connections).length} 个连接`, 'info');
+                } else {
+                    connectionsList.innerHTML = '<div class="text-gray-500 text-center py-4">暂无P2P连接</div>';
+                }
+            } catch (error) {
+                addLog('刷新连接列表失败: ' + error.message, 'error');
+            }
+        }
+
+        // 快速发送消息
+        function quickSendMessage(targetKey) {
+            document.getElementById('messageTargetKey').value = targetKey;
+            document.getElementById('messageContent').focus();
+        }
+
+        // 更新前端JavaScript代码，添加服务器注册、节点连接、消息发送、连接列表刷新等功能的实现
+        document.addEventListener('DOMContentLoaded', function() {
+            // 绑定按钮事件
+            document.getElementById('refreshStatus').addEventListener('click', updateP2PStatus);
+            document.getElementById('registerBtn').addEventListener('click', registerToServer);
+            document.getElementById('connectBtn').addEventListener('click', connectPeer);
+            document.getElementById('sendMessageBtn').addEventListener('click', sendMessage);
+            document.getElementById('refreshConnections').addEventListener('click', refreshConnections);
+            document.getElementById('autoRegister').addEventListener('click', registerToServer); // 修改为直接注册
+            document.getElementById('testConnection').addEventListener('click', testConnection);
+            document.getElementById('showHelp').addEventListener('click', showHelp);
+            document.getElementById('exportLog').addEventListener('click', exportLog);
+            document.getElementById('clearLog').addEventListener('click', clearLog);
+
+            // 回车键绑定
+            document.getElementById('connectKey').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') connectPeer();
+            });
+
+            document.getElementById('messageContent').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') sendMessage();
+            });
+
+            // 初始化状态
+            updateP2PStatus();
+            refreshConnections();
+            addLog('增强版P2P调试界面初始化完成', 'info');
+
+            // 定期更新状态和连接列表（每30秒）
+            setInterval(() => {
+                updateP2PStatus();
+                refreshConnections();
+            }, 30000);
+        });
+
+        // 测试连接
+        async function testConnection() {
+            addLog('开始测试P2P连接...', 'info');
+            await updateP2PStatus();
+            await refreshConnections();
+        }
+
+        // 显示帮助
+        function showHelp() {
+            alert(`增强版P2P调试界面使用说明:
+
+1. 注册到P2P服务器: 向信令服务器注册，获取NAT信息
+2. 连接P2P节点: 通过密钥连接到其他P2P节点
+3. 发送P2P消息: 向已连接的节点发送消息
+4. P2P连接列表: 查看当前所有P2P连接状态
+5. 自动注册: 一键注册到服务器
+6. 测试连接: 检查服务器连接和节点状态
+7. 清空日志: 清除操作日志记录
+8. 导出日志: 将日志保存为文本文件
+
+新功能特性:
+- 支持NAT穿透和UDP打洞
+- 实时显示外部IP和本地IP信息
+- 连接状态实时监控
+- 支持多节点并发连接
+
+注意: 需要确保P2P信令服务器正常运行且支持新的协议格式。`);
+        }
+
+        // 导出日志
+        function exportLog() {
+            const logText = logMessages.map(msg => msg.replace(/<[^>]*>/g, '')).join('\n');
+            const blob = new Blob([logText], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `enhanced-p2p-debug-log-${new Date().toISOString().slice(0, 19)}.txt`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            addLog('日志已导出', 'success');
+        }
+
+        // 清空日志
+        function clearLog() {
+            logMessages = [];
+            document.getElementById('logContainer').innerHTML = '<div class="text-green-400">[系统] 日志已清空</div>';
+            addLog('日志已清空', 'info');
+        }
+    </script>
+</body>
+</html>

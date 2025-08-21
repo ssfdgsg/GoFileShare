@@ -1,0 +1,83 @@
+services:
+  app:
+    build: .
+    container_name: goFileShare
+    restart: on-failure
+    ports:
+      - "8080:8080"
+    environment:
+      # MySQL 配置
+      - DB_HOST=db
+      - DB_PORT=3306
+      - DB_USER=root
+      - DB_PASSWORD=123456
+      - DB_NAME=gotest
+      # MongoDB 配置
+      - MONGO_HOST=filedb
+      - MONGO_PORT=27017
+      - MONGO_DATABASE=filestore
+    depends_on:
+      db:
+        condition: service_healthy
+      filedb:
+        condition: service_healthy
+    networks:
+      - app-network
+
+  db:
+    image: mysql:8.0
+    container_name: mysql-db-service
+    restart: always
+    environment:
+      - MYSQL_ROOT_PASSWORD=123456
+      - MYSQL_DATABASE=gotest
+      - MYSQL_CHARSET=utf8mb4
+      - MYSQL_COLLATION=utf8mb4_unicode_ci
+    ports:
+      - "3307:3306"  # 外部访问端口映射
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./init-scripts:/docker-entrypoint-initdb.d  # 可选：初始化脚本
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p123456"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - app-network
+
+  filedb:
+    image: mongo:6.0
+    container_name: mongo-db-service
+    restart: always
+    environment:
+      # 可选：设置MongoDB认证
+      - MONGO_INITDB_ROOT_USERNAME=admin
+      - MONGO_INITDB_ROOT_PASSWORD=123456
+      - MONGO_INITDB_DATABASE=filestore
+    ports:
+      - "27017:27017"  # 外部访问端口映射
+    volumes:
+      - mongo-data:/data/db
+      - mongo-config:/data/configdb
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - app-network
+
+volumes:
+  mysql-data:
+    driver: local
+  mongo-data:
+    driver: local
+  mongo-config:
+    driver: local
+
+networks:
+  app-network:
+    driver: bridge

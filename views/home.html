@@ -5,124 +5,656 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{.title}}</title>
     <style>
-        body {
-            font-family: 'Microsoft YaHei', sans-serif;
+        * {
             margin: 0;
             padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Microsoft YaHei', Arial, sans-serif;
             background-color: #f5f5f5;
-            color: #333;
         }
-        header {
-            background-color: #4b8bf4;
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
-            padding: 1rem;
-            text-align: center;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            padding: 1rem 2rem;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
         }
+
+        .header-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .logo {
+            font-size: 1.5rem;
+            font-weight: bold;
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .btn {
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            text-decoration: none;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background-color: #007bff;
+            color: white;
+        }
+
+        .btn-secondary {
+            background-color: #6c757d;
+            color: white;
+        }
+
+        .btn:hover {
+            opacity: 0.8;
+            transform: translateY(-1px);
+        }
+
         .container {
             max-width: 1200px;
             margin: 2rem auto;
+            padding: 0 1rem;
+        }
+
+        .toolbar {
+            background: white;
             padding: 1rem;
-            background-color: white;
             border-radius: 8px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        }
-        nav {
-            display: flex;
-            justify-content: space-between;
-            padding: 1rem;
-            background-color: #f0f0f0;
-            border-radius: 4px;
-        }
-        .welcome {
-            margin: 2rem 0;
-            padding: 1rem;
-            background-color: #e8f5e9;
-            border-radius: 4px;
-            text-align: center;
-        }
-        .card {
-            padding: 1.5rem;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
             margin-bottom: 1rem;
-            border: 1px solid #ddd;
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+        }
+
+        .file-upload {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .search-box {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            flex: 1;
+        }
+
+        .search-box input {
+            flex: 1;
+            padding: 0.5rem;
+            border: 1px solid #ccc;
             border-radius: 4px;
         }
-        .btn {
-            display: inline-block;
+
+        .breadcrumb {
+            background: white;
             padding: 0.5rem 1rem;
-            background-color: #4b8bf4;
-            color: white;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .breadcrumb a {
+            color: #007bff;
             text-decoration: none;
+            margin-right: 0.5rem;
+        }
+
+        .breadcrumb a:hover {
+            text-decoration: underline;
+        }
+
+        .file-list {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .file-item {
+            display: flex;
+            align-items: center;
+            padding: 1rem;
+            border-bottom: 1px solid #eee;
+            transition: background-color 0.3s;
+        }
+
+        .file-item:hover {
+            background-color: #f8f9fa;
+        }
+
+        .file-item:last-child {
+            border-bottom: none;
+        }
+
+        .file-icon {
+            width: 40px;
+            height: 40px;
+            margin-right: 1rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
             border-radius: 4px;
+            font-size: 1.2rem;
+        }
+
+        .folder-icon {
+            background-color: #ffc107;
+            color: white;
+        }
+
+        .file-icon.file {
+            background-color: #28a745;
+            color: white;
+        }
+
+        .file-info {
+            flex: 1;
+        }
+
+        .file-name {
+            font-weight: bold;
+            margin-bottom: 0.25rem;
             cursor: pointer;
         }
-        .btn-danger {
-            background-color: #f44336;
+
+        .file-name:hover {
+            color: #007bff;
         }
-        footer {
+
+        .file-meta {
+            font-size: 0.875rem;
+            color: #6c757d;
+        }
+
+        .file-actions {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+        }
+
+        .modal-content {
+            background-color: white;
+            margin: 10% auto;
+            padding: 2rem;
+            border-radius: 8px;
+            width: 90%;
+            max-width: 500px;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .close {
+            cursor: pointer;
+            font-size: 1.5rem;
+        }
+
+        .upload-area {
+            border: 2px dashed #ccc;
+            border-radius: 8px;
+            padding: 2rem;
             text-align: center;
-            padding: 1rem;
-            margin-top: 2rem;
-            color: #666;
+            transition: all 0.3s;
+        }
+
+        .upload-area.dragover {
+            border-color: #007bff;
+            background-color: #f8f9fa;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 20px;
+            background-color: #e9ecef;
+            border-radius: 10px;
+            overflow: hidden;
+            margin-top: 1rem;
+            display: none;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background-color: #28a745;
+            transition: width 0.3s;
+            width: 0%;
         }
     </style>
 </head>
 <body>
-    <header>
-        <h1>{{.title}}</h1>
-    </header>
-    
-    <div class="container">
-        <nav>
-            <div>
-                <a href="#" class="btn">首页</a>
-                <a href="#" class="btn">个人中心</a>
-            </div>
-            <div>
-                <a href="/logout" class="btn btn-danger">退出登录</a>
-            </div>
-        </nav>
-        
-        <div class="welcome">
-            <h2>欢迎回来！</h2>
-            <p>您已成功登录系统</p>
-        </div>
-        
-        <div class="card">
-            <h3>账号信息</h3>
-            <p>最后登录时间: <span id="lastLogin">{{.currentTime}}</span></p>
-        </div>
-        
-        <div class="card">
-            <h3>系统公告</h3>
-            <p>这是一个测试网页，用于演示Gin框架的登录与注册功能。</p>
-            <p>您可以在此处添加更多内容。</p>
+<header class="header">
+    <div class="header-content">
+        <div class="logo">📁 文件管理系统</div>
+        <div class="user-info">
+            <span>欢迎, {{.username}}</span>
+            <span>|</span>
+            <span>登录时间: {{.loginTime}}</span>
+            <a href="/p2p-debug" class="btn btn-primary">P2P调试</a>
+            <a href="/logout" class="btn btn-secondary">退出登录</a>
         </div>
     </div>
-    
-    <footer>
-        <p>© 2023 测试网页 | Gin示例项目</p>
-    </footer>
-</body>
+</header>
+
+<div class="container">
+    <div class="toolbar">
+        <div class="file-upload">
+            <input type="file" id="fileInput" multiple style="display: none;" onchange="uploadFiles()">
+            <button class="btn btn-primary" onclick="showUploadModal()">📤 上传文件</button>
+            <button class="btn btn-primary" onclick="showCreateFolderModal()">📁 新建文件夹</button>
+        </div>
+        <div class="search-box">
+            <input type="text" placeholder="搜索文件..." onkeypress="if(event.key==='Enter') searchFiles()">
+            <button class="btn btn-secondary" onclick="searchFiles()">🔍 搜索</button>
+        </div>
+    </div>
+
+    <div class="breadcrumb" id="breadcrumb">
+        <a href="#" onclick="navigateToFolder('root')">🏠 根目录</a>
+    </div>
+
+    <div class="file-list" id="fileList">
+        <!-- 文件列表将通过JavaScript动态生成 -->
+    </div>
+</div>
+
+<!-- 上传模态框 -->
+<div id="uploadModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>上传文件</h3>
+            <span class="close" onclick="closeUploadModal()">&times;</span>
+        </div>
+        <div class="upload-area" id="uploadArea">
+            <p>拖拽文件到这里或点击选择文件</p>
+            <input type="file" id="modalFileInput" multiple>
+        </div>
+        <div class="progress-bar" id="progressBar">
+            <div class="progress-fill" id="progressFill"></div>
+        </div>
+    </div>
+</div>
+
+<!-- 创建文件夹模态框 -->
+<div id="createFolderModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>新建文件夹</h3>
+            <span class="close" onclick="closeCreateFolderModal()">&times;</span>
+        </div>
+        <div>
+            <label for="folderNameInput">文件夹名称:</label>
+            <input type="text" id="folderNameInput" placeholder="请输入文件夹名称" style="width: 100%; padding: 0.5rem; margin: 0.5rem 0; border: 1px solid #ccc; border-radius: 4px;">
+            <div style="text-align: right; margin-top: 1rem;">
+                <button class="btn btn-secondary" onclick="closeCreateFolderModal()">取消</button>
+                <button class="btn btn-primary" onclick="createFolder()">创建</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
-    getUserName()
-    function getUserName() {
-        // 假设从后端API获取昵称
-        fetch('/api/username')
-            .then(response => response.json())
-            .then(data => {
-                // 将用户名显示在页面上
-                document.querySelector('h2').textContent = '您的昵称 ' + (data.username || '未知');
-                // 将用户名添加到URL参数
-                if (data.username) {
-                    const url = new URL(window.location);
-                    url.searchParams.set('username', data.username);
-                    window.history.replaceState({}, '', url);
+    let currentFolderId = 'root';
+    let fileList = [];
+
+    // 页面加载时获取文件列表
+    document.addEventListener('DOMContentLoaded', function() {
+        loadFileList(currentFolderId);
+        setupDragAndDrop();
+    });
+
+    // 加载文件列表
+    async function loadFileList(folderId) {
+        try {
+            const response = await fetch(`/api/listFileDirByID/${folderId}`);
+            const data = await response.json();
+
+            if (data.error) {
+                alert('错误: ' + data.error);
+                return;
+            }
+
+            fileList = data.files || [];
+            renderFileList();
+        } catch (error) {
+            console.error('加载文件列表失败:', error);
+            alert('加载文件列表失败');
+        }
+    }
+
+    // 渲染文件列表
+    function renderFileList() {
+        const container = document.getElementById('fileList');
+        container.innerHTML = '';
+
+        fileList.forEach(file => {
+            const fileItem = document.createElement('div');
+            fileItem.className = 'file-item';
+
+            const isFolder = file.type === true;
+            const icon = isFolder ? '📁' : '📄';
+            const iconClass = isFolder ? 'folder-icon' : 'file';
+
+            fileItem.innerHTML = `
+                    <div class="file-icon ${iconClass}">${icon}</div>
+                    <div class="file-info">
+                        <div class="file-name" onclick="${isFolder ? `navigateToFolder('${file._id}')` : `previewFile('${file._id}')`}">
+                            ${file.name}
+                        </div>
+                        <div class="file-meta">
+                            权限等级: ${file.auth_level || 0} | 路径: ${file.path}
+                        </div>
+                    </div>
+                    <div class="file-actions">
+                        ${!isFolder ? `<button class="btn btn-primary" onclick="downloadFile('${file._id}')">下载</button>` : ''}
+                        <button class="btn btn-secondary" onclick="deleteFile('${file._id}')">删除</button>
+                    </div>
+                `;
+
+            container.appendChild(fileItem);
+        });
+
+        if (fileList.length === 0) {
+            container.innerHTML = '<div class="file-item"><div class="file-info">此文件夹为空</div></div>';
+        }
+    }
+
+    // 导航到文件夹
+    function navigateToFolder(folderId) {
+        currentFolderId = folderId;
+        loadFileList(folderId);
+        updateBreadcrumb(folderId);
+    }
+
+    // 更新面包屑导航
+    function updateBreadcrumb(folderId) {
+        const breadcrumb = document.getElementById('breadcrumb');
+        // 这里可以实现更复杂的面包屑逻辑
+        breadcrumb.innerHTML = `
+                <a href="#" onclick="navigateToFolder('root')">🏠 根目录</a>
+                ${folderId !== 'root' ? ` / <span>当前文件夹</span>` : ''}
+            `;
+    }
+
+    // 显示上传模态框
+    function showUploadModal() {
+        document.getElementById('uploadModal').style.display = 'block';
+    }
+
+    // 关闭上传模态框
+    function closeUploadModal() {
+        document.getElementById('uploadModal').style.display = 'none';
+        document.getElementById('progressBar').style.display = 'none';
+        document.getElementById('progressFill').style.width = '0%';
+    }
+
+    // 显示创建文件夹模态框
+    function showCreateFolderModal() {
+        document.getElementById('createFolderModal').style.display = 'block';
+    }
+
+    // 关闭创建文件夹模态框
+    function closeCreateFolderModal() {
+        document.getElementById('createFolderModal').style.display = 'none';
+    }
+
+    // 设置拖拽上传
+    function setupDragAndDrop() {
+        const uploadArea = document.getElementById('uploadArea');
+
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            uploadArea.addEventListener(eventName, preventDefaults, false);
+            document.body.addEventListener(eventName, preventDefaults, false);
+        });
+
+        ['dragenter', 'dragover'].forEach(eventName => {
+            uploadArea.addEventListener(eventName, highlight, false);
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            uploadArea.addEventListener(eventName, unhighlight, false);
+        });
+
+        uploadArea.addEventListener('drop', handleDrop, false);
+        uploadArea.addEventListener('click', () => {
+            document.getElementById('modalFileInput').click();
+        });
+
+        document.getElementById('modalFileInput').addEventListener('change', function() {
+            uploadFiles(this.files);
+        });
+    }
+
+    function preventDefaults(e) {
+        e.preventDefault();
+        e.stopPropagation();
+    }
+
+    function highlight(e) {
+        document.getElementById('uploadArea').classList.add('dragover');
+    }
+
+    function unhighlight(e) {
+        document.getElementById('uploadArea').classList.remove('dragover');
+    }
+
+    function handleDrop(e) {
+        const dt = e.dataTransfer;
+        const files = dt.files;
+        uploadFiles(files);
+    }
+
+    // 上传文件
+    async function uploadFiles(files) {
+        if (!files || files.length === 0) return;
+
+        const progressBar = document.getElementById('progressBar');
+        const progressFill = document.getElementById('progressFill');
+
+        progressBar.style.display = 'block';
+
+        for (let i = 0; i < files.length; i++) {
+            const file = files[i];
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const response = await fetch(`/api/updateFile/${currentFolderId}`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (result.error) {
+                    alert(`上传 ${file.name} 失败: ${result.error}`);
+                } else {
+                    console.log(`${file.name} 上传成功`);
                 }
-            })
-            .catch(() => {
-                document.querySelector('h2').textContent = '您的昵称 未知';
+
+                // 更新进度条
+                const progress = ((i + 1) / files.length) * 100;
+                progressFill.style.width = progress + '%';
+
+            } catch (error) {
+                console.error(`上传 ${file.name} 失败:`, error);
+                alert(`上传 ${file.name} 失败`);
+            }
+        }
+
+        // 上传完成后刷新文件列表
+        setTimeout(() => {
+            closeUploadModal();
+            loadFileList(currentFolderId);
+        }, 1000);
+    }
+
+    // 下载文件
+    async function downloadFile(fileId) {
+        try {
+            // 创建一个隐藏的下载链接
+            const downloadUrl = `/api/downloadFile/${fileId}`;
+            const link = document.createElement('a');
+            link.href = downloadUrl;
+            link.download = ''; // 强制下载而不是预览
+            link.style.display = 'none';
+
+            // 添加到页面并触发点击
+            document.body.appendChild(link);
+            link.click();
+
+            // 清理
+            document.body.removeChild(link);
+        } catch (error) {
+            console.error('下载失败:', error);
+            alert('下载失败');
+        }
+    }
+
+    // 预览文件
+    function previewFile(fileId) {
+        try {
+            // 在新窗口中预览文件
+            window.open(`/api/downloadFile/${fileId}`, '_blank');
+        } catch (error) {
+            console.error('预览失败:', error);
+            alert('预览失败');
+        }
+    }
+
+    // 删除文件
+    async function deleteFile(fileId) {
+        if (!confirm('确定要删除这个文件吗？')) return;
+
+        try {
+            const response = await fetch(`/api/deleteFile/${fileId}`, {
+                method: 'DELETE'
             });
+
+            const result = await response.json();
+
+            if (result.error) {
+                alert('删除失败: ' + result.error);
+            } else {
+                alert('删除成功: ' + result.name);
+                // 刷新当前文件列表
+                loadFileList(currentFolderId);
+            }
+        } catch (error) {
+            console.error('删除失败:', error);
+            alert('删除失败');
+        }
+    }
+
+    // 创建文件��
+    async function createFolder() {
+        const folderName = document.getElementById('folderNameInput').value.trim();
+
+        if (!folderName) {
+            alert('文件夹名称不能为空');
+            return;
+        }
+
+        try {
+            const formData = new FormData();
+            formData.append('addDirName', folderName);
+
+            const response = await fetch(`/api/updateDir/${currentFolderId}`, {
+                method: 'POST',
+                body: formData
+            });
+
+            const result = await response.json();
+
+            if (result.error) {
+                alert('创建文件夹失败: ' + result.error);
+            } else {
+                alert('文件夹创建成功');
+                document.getElementById('folderNameInput').value = '';
+                closeCreateFolderModal();
+                loadFileList(currentFolderId);
+            }
+        } catch (error) {
+            console.error('创建文件夹失败:', error);
+            alert('创建文件夹失败');
+        }
+    }
+
+    // 搜索文件
+    async function searchFiles() {
+        const searchInput = document.querySelector('.search-box input');
+        const searchTerm = searchInput.value.trim();
+
+        if (!searchTerm) {
+            alert('请输入搜索关键词');
+            return;
+        }
+
+        try {
+            const response = await fetch(`/api/searchFiles?q=${encodeURIComponent(searchTerm)}`);
+            const data = await response.json();
+
+            if (data.error) {
+                alert('搜索失败: ' + data.error);
+                return;
+            }
+
+            fileList = data.files || [];
+            renderFileList();
+
+            // 更新面包屑显示搜索结果
+            const breadcrumb = document.getElementById('breadcrumb');
+            breadcrumb.innerHTML = `
+                <a href="#" onclick="navigateToFolder('root')">🏠 根目录</a>
+                / <span>搜索结果: "${searchTerm}"</span>
+            `;
+
+        } catch (error) {
+            console.error('搜索失败:', error);
+            alert('搜索失败');
+        }
+    }
+
+    // 点击模态框外部关闭
+    window.onclick = function(event) {
+        const uploadModal = document.getElementById('uploadModal');
+        const createFolderModal = document.getElementById('createFolderModal');
+        if (event.target === uploadModal) {
+            closeUploadModal();
+        } else if (event.target === createFolderModal) {
+            closeCreateFolderModal();
+        }
     }
 </script>
+</body>
 </html>
