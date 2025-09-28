@@ -68,12 +68,11 @@ func SetupRouter() *gin.Engine {
 		// 删除功能
 		private.DELETE("/api/deleteFile/:id", controllers.DeleteFile)
 		// P2P功能
-		private.GET("/api/p2p/status", controllers.GetP2PStatus)
 		private.POST("/api/p2p/register", controllers.RegisterP2PKey)
 		private.GET("/api/p2p/query", controllers.QueryP2PIP)
-		private.POST("/api/p2p/connect", controllers.ConnectP2PPeer)
-		private.POST("/api/p2p/send", controllers.SendP2PMessage)
-		private.GET("/api/p2p/connections", controllers.GetP2PConnections)
+		private.POST("/api/p2p/connect", controllers.ConnectP2P)
+		private.POST("/api/p2p/test", controllers.TestP2PConnection)
+		private.GET("/api/p2p/status", controllers.GetP2PStatus)
 	}
 
 	return r

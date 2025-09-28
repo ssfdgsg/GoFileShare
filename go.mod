@@ -5,6 +5,7 @@ go 1.23.0
 toolchain go1.24.4
 
 require (
+	github.com/denisbrodbeck/machineid v1.0.1
 	github.com/donnie4w/go-logger v0.28.0
 	github.com/fatih/color v1.18.0
 	github.com/gin-contrib/sessions v0.0.5
