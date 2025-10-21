@@ -56,3 +56,7 @@ FileStore/
 # Build output
 dist/
 build/
+
+# Local self-signed TLS for QUIC
+cert.pem
+key.pem
