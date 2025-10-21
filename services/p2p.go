@@ -20,6 +20,7 @@ import (
     "net/http"
     "os"
     "strconv"
+    "sync/atomic"
     "time"
 
     "github.com/denisbrodbeck/machineid"
@@ -41,6 +42,10 @@ type P2PService struct {
     Key        string
     UDPConn    *net.UDPConn
     STUNServer string
+
+    pollStarted   int32  // 原子标志，防止重复启动轮询
+    lastRequester string // 上次处理的请求来源
+    lastTimestamp int64  // 上次处理的请求时间
 }
 
 type TargetClient struct {
@@ -101,6 +106,9 @@ func (p *P2PService) Register() error {
     if resp.StatusCode != http.StatusOK {
         return fmt.Errorf("服务器返回错误状态码: %d", resp.StatusCode)
     }
+
+    // 启动洞打请求轮询，确保当对方发起连接时本端也会同时发包
+    p.startHolePunchPoller()
 
     return nil
 }
@@ -584,6 +592,43 @@ func startNATKeepAlive(conn *net.UDPConn, serverAddr *net.UDPAddr) {
         for range ticker.C {
             // 忽略错误：保活失败不致命，下次重试
             _, _ = conn.WriteToUDP(msg.Raw, serverAddr)
+        }
+    }()
+}
+
+// startHolePunchPoller 轮询信令服务器，若有人请求与本端打洞，则本端也主动向对方外网地址发包
+func (p *P2PService) startHolePunchPoller() {
+    if p == nil {
+        return
+    }
+    if !atomic.CompareAndSwapInt32(&p.pollStarted, 0, 1) {
+        return
+    }
+    go func() {
+        ticker := time.NewTicker(2 * time.Second)
+        defer ticker.Stop()
+        for range ticker.C {
+            // 查询对本端的打洞请求
+            info, err := p.GetHolePunch(p.Key)
+            if err != nil || info == nil || !info.HasRequest {
+                continue
+            }
+            // 去重，避免重复处理同一条请求
+            if info.RequesterKey == p.lastRequester && info.Timestamp == p.lastTimestamp {
+                continue
+            }
+
+            // 构造目标并启动对等打洞逻辑
+            target := &TargetClient{
+                ExternalIP:   info.ExternalIP,
+                ExternalPort: info.ExternalPort,
+                LocalIP:      info.LocalIP,
+                LocalPort:    info.LocalPort,
+            }
+            go target.EchoPeer()
+
+            p.lastRequester = info.RequesterKey
+            p.lastTimestamp = info.Timestamp
         }
     }()
 }
