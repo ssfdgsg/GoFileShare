@@ -3,64 +3,72 @@ package models
 import (
 	"GoFileShare/config"
 	"GoFileShare/utils"
-	"context"
+	"database/sql"
 	"fmt"
 	"github.com/fatih/color"
-	"go.mongodb.org/mongo-driver/bson/primitive"
-	"go.mongodb.org/mongo-driver/mongo"
 	"log"
 	"os"
 )
 
 // AddFileNode 添加文件节点到数据库
 func AddFileNode(path string, name string, nodeType bool, parentID string, authLevel int) error {
-	var parentObjID primitive.ObjectID
+	var parentIDPtr *int64
 	if parentID == "" || parentID == "root" || parentID == "undefined" || parentID == "null" {
-		// 根目录，使用零值 ObjectID
-		parentObjID = primitive.NilObjectID
-	} else if primitive.IsValidObjectID(parentID) {
-		// 合法 ObjectID
-		var err error
-		parentObjID, err = primitive.ObjectIDFromHex(parentID)
-		if err != nil {
-			return err
-		}
+		// 根目录，使用NULL
+		parentIDPtr = nil
 	} else {
-		// 非法 ID，返回错误
-		return fmt.Errorf("无效的父节点ID: %s", parentID)
+		// 解析父节点ID
+		var pid int64
+		if _, err := fmt.Sscanf(parentID, "%d", &pid); err != nil {
+			return fmt.Errorf("无效的父节点ID: %s", parentID)
+		}
+		parentIDPtr = &pid
 	}
 
-	fileNode := &config.FileNode{
-		ID:                 primitive.NewObjectID(),
-		ParentID:           parentObjID,
-		Name:               name,
-		Type:               nodeType,
-		Path:               path,
-		EffectiveAuthLevel: authLevel,
-		Storage: &config.StorageLocation{
-			SystemFilePath: config.GetSystemFilePath(path, config.RootPath),
-		},
+	systemFilePath := ""
+	if path != "" {
+		systemFilePath = config.GetSystemFilePath(path, config.RootPath)
 	}
 
-	_, err := config.FileCollection.InsertOne(context.TODO(), fileNode)
+	var typeInt int
+	if nodeType {
+		typeInt = 1
+	} else {
+		typeInt = 0
+	}
+
+	var query string
+	var args []interface{}
+
+	if parentIDPtr == nil {
+		query = `INSERT INTO file_nodes (parent_id, type, name, path, effective_auth_level, system_file_path) 
+				 VALUES (NULL, ?, ?, ?, ?, ?)`
+		args = []interface{}{typeInt, name, path, authLevel, systemFilePath}
+	} else {
+		query = `INSERT INTO file_nodes (parent_id, type, name, path, effective_auth_level, system_file_path) 
+				 VALUES (?, ?, ?, ?, ?, ?)`
+		args = []interface{}{*parentIDPtr, typeInt, name, path, authLevel, systemFilePath}
+	}
+
+	_, err := config.FileDB.Exec(query, args...)
 	return err
 }
 
 // DeleteFileNode 删除文件节点
-func DeleteFileNode(nodeID primitive.ObjectID) error {
-	_, err := config.FileCollection.DeleteMany(context.TODO(), map[string]interface{}{"_id": nodeID})
+func DeleteFileNode(nodeID int64) error {
+	_, err := config.FileDB.Exec("DELETE FROM file_nodes WHERE id = ?", nodeID)
 	return err
 }
 
 // DeleteFileNodeWithChildren 文件节点清除时，删除所有子节点和物理文件
 func DeleteFileNodeWithChildren(nodeID string) error {
-	nodeObjID, err := config.ParseObjectID(nodeID)
-	if err != nil {
-		return err
+	var nid int64
+	if _, err := fmt.Sscanf(nodeID, "%d", &nid); err != nil {
+		return fmt.Errorf("无效的节点ID: %s", nodeID)
 	}
 
 	deque := utils.NewDeque()
-	tempNodes, err := SearchFileNodeByID(nodeObjID)
+	tempNodes, err := SearchFileNodeByID(nid)
 	if err != nil {
 		return err
 	}
@@ -69,7 +77,7 @@ func DeleteFileNodeWithChildren(nodeID string) error {
 		return fmt.Errorf("文件节点不存在")
 	}
 
-	// ��节点加入队列
+	// 根节点加入队列
 	deque.EnterQueue(tempNodes[0])
 
 	var allNodesToDelete []config.FileNode
@@ -81,20 +89,14 @@ func DeleteFileNodeWithChildren(nodeID string) error {
 		allNodesToDelete = append(allNodesToDelete, currentNode)
 
 		// 查找当前节点的所有子节点
-		cursor, err := config.FileCollection.Find(context.TODO(), map[string]interface{}{"parent_id": currentNode.ID})
+		childNodes, err := SearchFileNodeByParentID(&currentNode.ID)
 		if err != nil {
 			return err
 		}
 
-		for cursor.Next(context.TODO()) {
-			childNode := &config.FileNode{}
-			if err := cursor.Decode(childNode); err != nil {
-				cursor.Close(context.TODO())
-				return err
-			}
-			deque.EnterQueue(*childNode)
+		for _, childNode := range childNodes {
+			deque.EnterQueue(childNode)
 		}
-		cursor.Close(context.TODO())
 	}
 
 	// 删除所有物理文件（从叶子节点开始删除）
@@ -113,40 +115,57 @@ func DeleteFileNodeWithChildren(nodeID string) error {
 	}
 
 	// 删除数据库中的所有节点记录
-	var deleteIDs []primitive.ObjectID
 	for _, node := range allNodesToDelete {
-		deleteIDs = append(deleteIDs, node.ID)
-	}
-
-	if len(deleteIDs) > 0 {
-		_, err = config.FileCollection.DeleteMany(context.TODO(), map[string]interface{}{"_id": map[string]interface{}{"$in": deleteIDs}})
-		if err != nil {
+		if err := DeleteFileNode(node.ID); err != nil {
 			return err
 		}
-		color.Green("成功删除 %d 个文件节点记录", len(deleteIDs))
 	}
 
+	color.Green("成功删除 %d 个文件节点记录", len(allNodesToDelete))
 	return nil
 }
 
 // SearchFileNodeByID 在数据库中根据ID搜索文件节点
-func SearchFileNodeByID(nodeID primitive.ObjectID) ([]config.FileNode, error) {
-	filter := map[string]interface{}{"_id": nodeID}
-	cursor, err := config.FileCollection.Find(context.TODO(), filter)
+func SearchFileNodeByID(nodeID int64) ([]config.FileNode, error) {
+	query := `SELECT id, parent_id, type, name, path, effective_auth_level, system_file_path, net_file_path 
+			  FROM file_nodes WHERE id = ?`
+
+	rows, err := config.FileDB.Query(query, nodeID)
 	if err != nil {
 		return nil, err
 	}
-	defer func(cursor *mongo.Cursor, ctx context.Context) {
-		err := cursor.Close(ctx)
-		if err != nil {
-			color.Red("failed to close cursor: %v", err)
-			log.Fatalf("failed to close cursor: %v", err)
-			return
-		}
-	}(cursor, context.TODO())
+	defer rows.Close()
 
 	var results []config.FileNode
-	if err = cursor.All(context.TODO(), &results); err != nil {
+	for rows.Next() {
+		var node config.FileNode
+		var typeInt int
+		var parentID sql.NullInt64
+		var systemFilePath, netFilePath sql.NullString
+
+		err := rows.Scan(&node.ID, &parentID, &typeInt, &node.Name, &node.Path,
+			&node.EffectiveAuthLevel, &systemFilePath, &netFilePath)
+		if err != nil {
+			log.Printf("failed to scan row: %v", err)
+			return nil, err
+		}
+
+		node.Type = typeInt == 1
+		if parentID.Valid {
+			node.ParentID = &parentID.Int64
+		}
+
+		if systemFilePath.Valid || netFilePath.Valid {
+			node.Storage = &config.StorageLocation{
+				SystemFilePath: systemFilePath.String,
+				NetFilePath:    netFilePath.String,
+			}
+		}
+
+		results = append(results, node)
+	}
+
+	if err = rows.Err(); err != nil {
 		return nil, err
 	}
 
@@ -154,38 +173,57 @@ func SearchFileNodeByID(nodeID primitive.ObjectID) ([]config.FileNode, error) {
 }
 
 // SearchFileNodeByParentID 在数据库中根据父节点ID搜索文件节点
-func SearchFileNodeByParentID(parentID primitive.ObjectID) ([]config.FileNode, error) {
-	var filter map[string]interface{}
+func SearchFileNodeByParentID(parentID *int64) ([]config.FileNode, error) {
+	var query string
+	var args []interface{}
 
-	// 处理根目录的特殊情况
-	if parentID == primitive.NilObjectID {
-		// 查询parent_id为null或不存在的文���
-		filter = map[string]interface{}{
-			"$or": []interface{}{
-				map[string]interface{}{"parent_id": nil},
-				map[string]interface{}{"parent_id": primitive.NilObjectID},
-				map[string]interface{}{"parent_id": map[string]interface{}{"$exists": false}},
-			},
-		}
+	if parentID == nil {
+		// 查询根目录节点（parent_id为NULL）
+		query = `SELECT id, parent_id, type, name, path, effective_auth_level, system_file_path, net_file_path 
+				 FROM file_nodes WHERE parent_id IS NULL`
+		args = []interface{}{}
 	} else {
-		filter = map[string]interface{}{"parent_id": parentID}
+		query = `SELECT id, parent_id, type, name, path, effective_auth_level, system_file_path, net_file_path 
+				 FROM file_nodes WHERE parent_id = ?`
+		args = []interface{}{*parentID}
 	}
 
-	cursor, err := config.FileCollection.Find(context.TODO(), filter)
+	rows, err := config.FileDB.Query(query, args...)
 	if err != nil {
 		return nil, err
 	}
-	defer func(cursor *mongo.Cursor, ctx context.Context) {
-		err := cursor.Close(ctx)
-		if err != nil {
-			color.Red("failed to close cursor: %v", err)
-			log.Fatalf("failed to close cursor: %v", err)
-			return
-		}
-	}(cursor, context.TODO())
+	defer rows.Close()
 
 	var results []config.FileNode
-	if err = cursor.All(context.TODO(), &results); err != nil {
+	for rows.Next() {
+		var node config.FileNode
+		var typeInt int
+		var parentIDVal sql.NullInt64
+		var systemFilePath, netFilePath sql.NullString
+
+		err := rows.Scan(&node.ID, &parentIDVal, &typeInt, &node.Name, &node.Path,
+			&node.EffectiveAuthLevel, &systemFilePath, &netFilePath)
+		if err != nil {
+			log.Printf("failed to scan row: %v", err)
+			return nil, err
+		}
+
+		node.Type = typeInt == 1
+		if parentIDVal.Valid {
+			node.ParentID = &parentIDVal.Int64
+		}
+
+		if systemFilePath.Valid || netFilePath.Valid {
+			node.Storage = &config.StorageLocation{
+				SystemFilePath: systemFilePath.String,
+				NetFilePath:    netFilePath.String,
+			}
+		}
+
+		results = append(results, node)
+	}
+
+	if err = rows.Err(); err != nil {
 		return nil, err
 	}
 
@@ -194,51 +232,92 @@ func SearchFileNodeByParentID(parentID primitive.ObjectID) ([]config.FileNode, e
 
 // SearchFileNodeByName 在数据库中根据名称搜索文件节点
 func SearchFileNodeByName(name string) ([]config.FileNode, error) {
-	filter := map[string]interface{}{"name": name}
-	cursor, err := config.FileCollection.Find(context.TODO(), filter)
+	query := `SELECT id, parent_id, type, name, path, effective_auth_level, system_file_path, net_file_path 
+			  FROM file_nodes WHERE name = ?`
+
+	rows, err := config.FileDB.Query(query, name)
 	if err != nil {
 		return nil, err
 	}
-	defer func(cursor *mongo.Cursor, ctx context.Context) {
-		err := cursor.Close(ctx)
-		if err != nil {
-			color.Red("failed to close cursor: %v", err)
-			log.Fatalf("failed to close cursor: %v", err)
-		}
-	}(cursor, context.TODO())
+	defer rows.Close()
 
 	var results []config.FileNode
-	if err = cursor.All(context.TODO(), &results); err != nil {
+	for rows.Next() {
+		var node config.FileNode
+		var typeInt int
+		var parentID sql.NullInt64
+		var systemFilePath, netFilePath sql.NullString
+
+		err := rows.Scan(&node.ID, &parentID, &typeInt, &node.Name, &node.Path,
+			&node.EffectiveAuthLevel, &systemFilePath, &netFilePath)
+		if err != nil {
+			log.Printf("failed to scan row: %v", err)
+			return nil, err
+		}
+
+		node.Type = typeInt == 1
+		if parentID.Valid {
+			node.ParentID = &parentID.Int64
+		}
+
+		if systemFilePath.Valid || netFilePath.Valid {
+			node.Storage = &config.StorageLocation{
+				SystemFilePath: systemFilePath.String,
+				NetFilePath:    netFilePath.String,
+			}
+		}
+
+		results = append(results, node)
+	}
+
+	if err = rows.Err(); err != nil {
 		return nil, err
 	}
 
 	return results, nil
 }
 
-// SearchFileNodeByNamePattern 在数��库中根据名称模式搜索文件节点（支持模糊搜索）
+// SearchFileNodeByNamePattern 在数据库中根据名称模式搜索文件节点（支持模糊搜索）
 func SearchFileNodeByNamePattern(pattern string) ([]config.FileNode, error) {
-	// 使用MongoDB的正则表达式进行模糊搜索
-	filter := map[string]interface{}{
-		"name": map[string]interface{}{
-			"$regex":   pattern,
-			"$options": "i", // 忽略大小写
-		},
-	}
+	query := `SELECT id, parent_id, type, name, path, effective_auth_level, system_file_path, net_file_path 
+			  FROM file_nodes WHERE name LIKE ?`
 
-	cursor, err := config.FileCollection.Find(context.TODO(), filter)
+	rows, err := config.FileDB.Query(query, "%"+pattern+"%")
 	if err != nil {
 		return nil, err
 	}
-	defer func(cursor *mongo.Cursor, ctx context.Context) {
-		err := cursor.Close(ctx)
-		if err != nil {
-			color.Red("failed to close cursor: %v", err)
-			log.Fatalf("failed to close cursor: %v", err)
-		}
-	}(cursor, context.TODO())
+	defer rows.Close()
 
 	var results []config.FileNode
-	if err = cursor.All(context.TODO(), &results); err != nil {
+	for rows.Next() {
+		var node config.FileNode
+		var typeInt int
+		var parentID sql.NullInt64
+		var systemFilePath, netFilePath sql.NullString
+
+		err := rows.Scan(&node.ID, &parentID, &typeInt, &node.Name, &node.Path,
+			&node.EffectiveAuthLevel, &systemFilePath, &netFilePath)
+		if err != nil {
+			log.Printf("failed to scan row: %v", err)
+			return nil, err
+		}
+
+		node.Type = typeInt == 1
+		if parentID.Valid {
+			node.ParentID = &parentID.Int64
+		}
+
+		if systemFilePath.Valid || netFilePath.Valid {
+			node.Storage = &config.StorageLocation{
+				SystemFilePath: systemFilePath.String,
+				NetFilePath:    netFilePath.String,
+			}
+		}
+
+		results = append(results, node)
+	}
+
+	if err = rows.Err(); err != nil {
 		return nil, err
 	}
 
@@ -247,6 +326,33 @@ func SearchFileNodeByNamePattern(pattern string) ([]config.FileNode, error) {
 
 // InsertFileNode 插入文件节点
 func InsertFileNode(fileNode *config.FileNode) error {
-	_, err := config.FileCollection.InsertOne(context.TODO(), fileNode)
+	var typeInt int
+	if fileNode.Type {
+		typeInt = 1
+	} else {
+		typeInt = 0
+	}
+
+	systemFilePath := ""
+	netFilePath := ""
+	if fileNode.Storage != nil {
+		systemFilePath = fileNode.Storage.SystemFilePath
+		netFilePath = fileNode.Storage.NetFilePath
+	}
+
+	var query string
+	var args []interface{}
+
+	if fileNode.ParentID == nil {
+		query = `INSERT INTO file_nodes (parent_id, type, name, path, effective_auth_level, system_file_path, net_file_path) 
+				 VALUES (NULL, ?, ?, ?, ?, ?, ?)`
+		args = []interface{}{typeInt, fileNode.Name, fileNode.Path, fileNode.EffectiveAuthLevel, systemFilePath, netFilePath}
+	} else {
+		query = `INSERT INTO file_nodes (parent_id, type, name, path, effective_auth_level, system_file_path, net_file_path) 
+				 VALUES (?, ?, ?, ?, ?, ?, ?)`
+		args = []interface{}{*fileNode.ParentID, typeInt, fileNode.Name, fileNode.Path, fileNode.EffectiveAuthLevel, systemFilePath, netFilePath}
+	}
+
+	_, err := config.FileDB.Exec(query, args...)
 	return err
 }

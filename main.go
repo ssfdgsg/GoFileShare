@@ -2,50 +2,32 @@ package main
 
 import (
 	"GoFileShare/config"
-	"GoFileShare/models"
 	"GoFileShare/routes"
 	"fmt"
 	"log"
+	"net"
 	_ "net/http/pprof"
+	"os"
 
-	"github.com/donnie4w/go-logger/logger"
 	"github.com/joho/godotenv"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 func main() {
 	err := godotenv.Load(".env")
 	if err != nil {
-		log.Fatalf("加载配置文件失败: %v", err)
-	}
-	// 初始化数据库连接
-	if err := config.InitDB(); err != nil {
-		log.Fatalf("初始化数据库失败: %v", err)
-	}
-	defer config.CloseDB()
-
-	// 初始化数据库表
-	if err := config.InitTable(); err != nil {
-		log.Fatalf("初始化数据表失败: %v", err)
+		log.Printf("警告：加载配置文件失败（非必需）: %v", err)
 	}
 
+	// 初始化文件数据库（SQLite）
 	if err := config.InitFileDB(); err != nil {
 		log.Fatalf("初始化文件系统链接错误: %v", err)
 	} else {
 		log.Println("初始化文件系统成功")
 	}
-	var RootAuthLevel int
-	RootAuthLevel = 100
+	defer config.CloseFileDB()
 
-	result, err := models.SearchFileNodeByName("root")
-	if err != nil {
-		log.Fatal(err)
-	}
-	if len(result) == 0 {
-		err := models.AddFileNode("./FileStore", "root", false, primitive.NewObjectID().String(), RootAuthLevel)
-		if err != nil {
-			logger.Fatal(err)
-		}
+	if err := os.MkdirAll("./FileStore", 0755); err != nil {
+		log.Fatalf("创建文件存储目录失败: %v", err)
 	}
 
 	// 设置路由
@@ -54,7 +36,26 @@ func main() {
 	// 加载HTML模板
 	r.LoadHTMLGlob("views/*.html")
 
-	fmt.Println("服务器启动在 http://localhost:8080")
+	// 显示局域网访问地址
+	fmt.Println("==========================================")
+	fmt.Println("🚀 GoFileShare 文件共享服务已启动")
+	fmt.Println("==========================================")
+	fmt.Println("本地访问: http://localhost:8080")
+
+	// 获取局域网IP地址
+	addrs, err := net.InterfaceAddrs()
+	if err == nil {
+		fmt.Println("\n局域网访问地址:")
+		for _, addr := range addrs {
+			if ipnet, ok := addr.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
+				if ipnet.IP.To4() != nil {
+					fmt.Printf("  http://%s:8080\n", ipnet.IP.String())
+				}
+			}
+		}
+	}
+	fmt.Println("==========================================\n")
+
 	if err := r.Run("0.0.0.0:8080"); err != nil {
 		log.Fatalf("服务器启动失败: %v", err)
 	}

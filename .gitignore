@@ -1,58 +1,39 @@
-# Binaries for programs and plugins
+# Binary files
+gofileshare
 *.exe
-*.exe~
 *.dll
 *.so
 *.dylib
 
-# Test binary, built with `go test -c`
+# Databases
+*.db
+*.db-shm
+*.db-wal
+data/
+
+# Storage
+FileStore/
+
+# Test files
 *.test
-*.bat
 
-# Output of the go build process
-*.out
+# Logs
+*.log
+app.log
 
-# Dependency directories (remove the comment below to include it)
-# vendor/
+# Environment variables
+.env
 
-# Go workspace file
-go.work
-
-# IDE
+# IDE specific files
 .idea/
+.vscode/
 *.swp
 *.swo
 *~
 
-# OS generated files
+# OS specific files
 .DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
 Thumbs.db
-.env
-*.env
 
-
-# Logs
-*.log
-
-# Runtime data
-pids
-*.pid
-*.seed
-*.pid.lock
-
-# Coverage directory used by tools like istanbul
-coverage/
-
-# Temporary folders
-tmp/
-temp/
-FileStore/
-
-# Build output
-dist/
-build/
+# Go specific
+vendor/

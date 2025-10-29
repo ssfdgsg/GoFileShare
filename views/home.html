@@ -255,13 +255,11 @@
 <body>
 <header class="header">
     <div class="header-content">
-        <div class="logo">📁 文件管理系统</div>
+        <div class="logo">📁 GoFileShare - 局域网文件共享</div>
         <div class="user-info">
-            <span>欢迎, {{.username}}</span>
+            <span>当前时间: {{.currentTime}}</span>
             <span>|</span>
-            <span>登录时间: {{.loginTime}}</span>
             <a href="/p2p-debug" class="btn btn-primary">P2P调试</a>
-            <a href="/logout" class="btn btn-secondary">退出登录</a>
         </div>
     </div>
 </header>
@@ -368,7 +366,7 @@
             fileItem.innerHTML = `
                     <div class="file-icon ${iconClass}">${icon}</div>
                     <div class="file-info">
-                        <div class="file-name" onclick="${isFolder ? `navigateToFolder('${file._id}')` : `previewFile('${file._id}')`}">
+                        <div class="file-name" onclick="${isFolder ? `navigateToFolder('${file.id}')` : `previewFile('${file.id}')`}">
                             ${file.name}
                         </div>
                         <div class="file-meta">
@@ -376,8 +374,8 @@
                         </div>
                     </div>
                     <div class="file-actions">
-                        ${!isFolder ? `<button class="btn btn-primary" onclick="downloadFile('${file._id}')">下载</button>` : ''}
-                        <button class="btn btn-secondary" onclick="deleteFile('${file._id}')">删除</button>
+                        ${!isFolder ? `<button class="btn btn-primary" onclick="downloadFile('${file.id}')">下载</button>` : ''}
+                        <button class="btn btn-secondary" onclick="deleteFile('${file.id}')">删除</button>
                     </div>
                 `;
 
