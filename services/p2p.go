@@ -36,10 +36,15 @@ type RegisterData struct {
 	Timestamp int64  `json:"timestamp"`  // 时间戳
 }
 type P2PService struct {
-	OutIP   string
-	OutPort string
-	Key     string
+	OutIP     string
+	OutPort   string
+	Key       string
+	LocalPort int          // 本地实际使用的端口
+	UDPConn   *net.UDPConn // 复用的UDP连接
 }
+
+// 全局UDP连接管理
+var GlobalUDPConn *net.UDPConn
 
 type TargetClient struct {
 	ExternalIP   string // 目标客户端外网IP
@@ -113,7 +118,8 @@ func InitInfo() (*P2PService, error) {
 		"turn.cloudflare.com:3478",
 		"stun.miwifi.com:3478",
 	}
-	conn, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.ParseIP("0.0.0.0"), Port: 8080})
+	// 使用随机端口避免冲突
+	conn, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.ParseIP("0.0.0.0"), Port: 0})
 	if err != nil {
 		return nil, fmt.Errorf("创建UDP连接失败: %w", err)
 	}
@@ -169,10 +175,25 @@ func InitInfo() (*P2PService, error) {
 		keySource := machineID + macs + mappedAddr.IP.String() + strconv.Itoa(mappedAddr.Port)
 		hash := sha256.Sum256([]byte(keySource))
 		uniqueKey := hex.EncodeToString(hash[:])
+		// 获取本地实际端口
+		localAddr := conn.LocalAddr().(*net.UDPAddr)
+
 		service := &P2PService{
-			OutIP: mappedAddr.IP.String(), OutPort: strconv.Itoa(mappedAddr.Port), Key: uniqueKey,
+			OutIP:     mappedAddr.IP.String(),
+			OutPort:   strconv.Itoa(mappedAddr.Port),
+			Key:       uniqueKey,
+			LocalPort: localAddr.Port,
+			UDPConn:   conn, // 保持连接复用
 		}
+
+		// 保存全局UDP连接
+		GlobalUDPConn = conn
 		GlobalP2PClient = service
+
+		log.Printf("P2P服务初始化成功: 外网=%s:%s, 本地端口=%d",
+			service.OutIP, service.OutPort, service.LocalPort)
+
+		// 不要关闭连接，让它保持开启用于后续复用
 		return service, nil
 	}
 
@@ -290,6 +311,126 @@ func (tc *TargetClient) EchoPeer() {
 			log.Printf("关闭QUIC连接失败: %v", err)
 		}
 	}()
+
+	log.Printf("P2P连接建立成功！开始处理数据传输...")
+
+	// 创建上下文用于优雅关闭
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// 启动连接处理
+	tc.handleP2PConnection(ctx, qConn)
+}
+
+// handleP2PConnection 处理P2P连接的数据传输
+func (tc *TargetClient) handleP2PConnection(ctx context.Context, conn *quic.Conn) {
+	log.Printf("开始处理P2P连接...")
+
+	// 启动两个goroutine分别处理收发
+	go tc.handleIncomingStreams(ctx, conn)
+	go tc.sendHeartbeat(ctx, conn)
+
+	// 保持连接活跃
+	<-ctx.Done()
+	log.Printf("P2P连接处理结束")
+}
+
+// handleIncomingStreams 处理入站数据流
+func (tc *TargetClient) handleIncomingStreams(ctx context.Context, conn *quic.Conn) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+
+		stream, err := conn.AcceptStream(ctx)
+		if err != nil {
+			log.Printf("接受流失败: %v", err)
+			return
+		}
+
+		// 为每个流启动处理goroutine
+		go tc.handleStream(ctx, stream)
+	}
+}
+
+// handleStream 处理单个数据流
+func (tc *TargetClient) handleStream(ctx context.Context, stream quic.Stream) {
+	defer stream.Close()
+
+	log.Printf("接收到新的数据流: %d", stream.StreamID())
+
+	// 读取流数据
+	buffer := make([]byte, 4096)
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+
+		n, err := stream.Read(buffer)
+		if err != nil {
+			if err.Error() != "EOF" {
+				log.Printf("读取流数据失败: %v", err)
+			}
+			return
+		}
+
+		message := string(buffer[:n])
+		log.Printf("收到P2P消息: %s", message)
+
+		// 处理不同类型的消息
+		tc.processMessage(ctx, stream, message)
+	}
+}
+
+// processMessage 处理接收到的消息
+func (tc *TargetClient) processMessage(ctx context.Context, stream quic.Stream, message string) {
+	if message == "PING" {
+		// 响应心跳
+		_, err := stream.Write([]byte("PONG"))
+		if err != nil {
+			log.Printf("发送PONG失败: %v", err)
+		}
+	} else if message == "HELLO" {
+		// 响应握手
+		response := "HELLO_RESPONSE:" + GlobalP2PClient.Key
+		_, err := stream.Write([]byte(response))
+		if err != nil {
+			log.Printf("发送握手响应失败: %v", err)
+		}
+	} else {
+		// 处理其他消息
+		log.Printf("处理消息: %s", message)
+		// 这里可以添加文件传输、聊天等功能
+	}
+}
+
+// sendHeartbeat 发送心跳保持连接
+func (tc *TargetClient) sendHeartbeat(ctx context.Context, conn *quic.Conn) {
+	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			stream, err := conn.OpenStreamSync(ctx)
+			if err != nil {
+				log.Printf("打开心跳流失败: %v", err)
+				return
+			}
+
+			_, err = stream.Write([]byte("PING"))
+			if err != nil {
+				log.Printf("发送心跳失败: %v", err)
+			}
+			stream.Close()
+		}
+	}
 }
 
 func (tc *TargetClient) setupUDPSocketAndPunch(p P2PService) (net.PacketConn, net.Addr, error) {
@@ -316,7 +457,7 @@ func (tc *TargetClient) setupUDPSocketAndPunch(p P2PService) (net.PacketConn, ne
 
 // establishP2PConnection 使用统一UDP Socket建立P2P QUIC连接
 func (tc *TargetClient) establishP2PConnection() *quic.Conn {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
 	// 生成自签名证书或使用已有证书
@@ -329,12 +470,31 @@ func (tc *TargetClient) establishP2PConnection() *quic.Conn {
 	// 统一协议名称
 	const appProtocol = "p2p-file-share"
 
-	// 第一步：建立统一的UDP Socket
-	localAddr := &net.UDPAddr{IP: net.ParseIP("0.0.0.0"), Port: 8080}
+	// 第一步：复用全局P2P客户端的端口信息
+	if GlobalP2PClient == nil {
+		log.Printf("全局P2P客户端未初始化")
+		return nil
+	}
+
+	// 解析本地端口
+	localPort, err := strconv.Atoi(GlobalP2PClient.OutPort)
+	if err != nil {
+		log.Printf("解析本地端口失败: %v", err)
+		return nil
+	}
+
+	// 使用与STUN相同的端口建立UDP连接
+	localAddr := &net.UDPAddr{IP: net.ParseIP("0.0.0.0"), Port: localPort}
 	udpConn, err := net.ListenUDP("udp", localAddr)
 	if err != nil {
-		log.Printf("无法创建UDP连接: %v", err)
-		return nil
+		log.Printf("无法创建UDP连接在端口 %d: %v", localPort, err)
+		// 如果端口被占用，尝试使用随机端口
+		localAddr = &net.UDPAddr{IP: net.ParseIP("0.0.0.0"), Port: 0}
+		udpConn, err = net.ListenUDP("udp", localAddr)
+		if err != nil {
+			log.Printf("无法创建UDP连接: %v", err)
+			return nil
+		}
 	}
 	defer func() {
 		if err := udpConn.Close(); err != nil {
@@ -342,49 +502,91 @@ func (tc *TargetClient) establishP2PConnection() *quic.Conn {
 		}
 	}()
 
-	// 第二步：使用UDP Socket进行NAT穿透
+	log.Printf("本地UDP连接已建立: %s", udpConn.LocalAddr().String())
+
+	// 第二步：解析远程地址并进行双向NAT穿透
 	remoteAddr, err := net.ResolveUDPAddr("udp", net.JoinHostPort(tc.ExternalIP, tc.ExternalPort))
 	if err != nil {
 		log.Printf("无法解析远程地址: %v", err)
 		return nil
 	}
 
-	// 发送打洞包
-	punchMessage := []byte("PUNCH:" + GlobalP2PClient.Key)
-	for i := 0; i < 10; i++ {
-		_, err := udpConn.WriteToUDP(punchMessage, remoteAddr)
-		if err != nil {
-			log.Printf("发送打洞包失败 (尝试 %d): %v", i+1, err)
-		} else {
-			log.Printf("发送打洞包成功 (尝试 %d)", i+1)
+	log.Printf("开始NAT穿透到: %s", remoteAddr.String())
+
+	// 持续发送打洞包，实现双向打洞
+	punchDone := make(chan bool, 1)
+	go func() {
+		punchMessage := []byte("PUNCH:" + GlobalP2PClient.Key)
+		for i := 0; i < 30; i++ { // 增加打洞尝试次数
+			select {
+			case <-ctx.Done():
+				return
+			case <-punchDone:
+				return
+			default:
+			}
+
+			_, err := udpConn.WriteToUDP(punchMessage, remoteAddr)
+			if err != nil {
+				log.Printf("发送打洞包失败 (尝试 %d): %v", i+1, err)
+			} else {
+				log.Printf("发送打洞包成功 (尝试 %d)", i+1)
+			}
+			time.Sleep(500 * time.Millisecond) // 增加间隔
 		}
-		time.Sleep(200 * time.Millisecond)
-	}
+	}()
+
+	// 监听打洞响应
+	go func() {
+		buffer := make([]byte, 1024)
+		udpConn.SetReadDeadline(time.Now().Add(30 * time.Second))
+		n, addr, err := udpConn.ReadFromUDP(buffer)
+		if err != nil {
+			log.Printf("读取打洞响应失败: %v", err)
+			return
+		}
+		log.Printf("收到来自 %s 的打洞响应: %s", addr.String(), string(buffer[:n]))
+		punchDone <- true
+	}()
+
+	// 等待一段时间让打洞完成
+	time.Sleep(3 * time.Second)
 
 	// 第三步：在同一UDP连接上建立QUIC连接
 	connChan := make(chan *quic.Conn, 1)
 	errChan := make(chan error, 2)
 
-	// TLS配置
+	// TLS配置 - 服务器端
 	tlsConf := &tls.Config{
-		Certificates: []tls.Certificate{cert},
-		NextProtos:   []string{appProtocol},
+		Certificates:       []tls.Certificate{cert},
+		NextProtos:         []string{appProtocol},
+		InsecureSkipVerify: true, // 允许自签名证书
 	}
 
+	// TLS配置 - 客户端
 	clientTLSConf := &tls.Config{
 		InsecureSkipVerify: true,
 		NextProtos:         []string{appProtocol},
+		ServerName:         "p2p-server", // 设置服务器名称
 	}
 
-	// QUIC配置
+	// QUIC配置 - 更宽松的超时设置
 	quicConf := &quic.Config{
-		HandshakeIdleTimeout: 10 * time.Second,
-		MaxIdleTimeout:       30 * time.Second,
-		KeepAlivePeriod:      5 * time.Second,
+		HandshakeIdleTimeout:    30 * time.Second, // 增加握手超时
+		MaxIdleTimeout:          60 * time.Second, // 增加最大空闲超时
+		KeepAlivePeriod:         10 * time.Second, // 增加keepalive间隔
+		DisablePathMTUDiscovery: true,             // 禁用路径MTU发现，避免某些网络问题
 	}
 
 	// 监听协程 - 作为服务器接受连接
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("监听协程panic: %v", r)
+				errChan <- fmt.Errorf("监听协程发生panic: %v", r)
+			}
+		}()
+
 		log.Printf("启动QUIC监听器，等待入站连接...")
 
 		// 使用现有的UDP连接创建QUIC监听器
@@ -399,15 +601,18 @@ func (tc *TargetClient) establishP2PConnection() *quic.Conn {
 			}
 		}()
 
+		log.Printf("QUIC监听器已启动，本地地址: %s", udpConn.LocalAddr().String())
+
 		session, err := listener.Accept(ctx)
 		if err != nil {
 			if ctx.Err() == nil {
+				log.Printf("接受QUIC连接失败: %v", err)
 				errChan <- fmt.Errorf("接受QUIC连接失败: %w", err)
 			}
 			return
 		}
 
-		log.Printf("成功接受入站QUIC连接")
+		log.Printf("成功接受入站QUIC连接，远程地址: %s", session.RemoteAddr().String())
 		select {
 		case connChan <- session:
 		case <-ctx.Done():
@@ -419,49 +624,73 @@ func (tc *TargetClient) establishP2PConnection() *quic.Conn {
 
 	// 拨号协程 - 作为客户端发起连接
 	go func() {
-		// 稍微延迟，给对方启动监听器的时间
-		time.Sleep(1 * time.Second)
+		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("拨号协程panic: %v", r)
+				errChan <- fmt.Errorf("拨号协程发生panic: %v", r)
+			}
+		}()
+
+		// 等待NAT穿透完成和对方监听器启动
+		time.Sleep(5 * time.Second)
 
 		log.Printf("尝试建立出站QUIC连接到: %s", remoteAddr.String())
 
-		// 使用正确的QUIC Dial函数签名
-		session, err := quic.Dial(ctx, udpConn, remoteAddr, clientTLSConf, quicConf)
-		if err != nil {
-			if ctx.Err() == nil {
-				errChan <- fmt.Errorf("建立QUIC连接失败: %w", err)
+		// 多次重试连接
+		var lastErr error
+		for i := 0; i < 3; i++ {
+			select {
+			case <-ctx.Done():
+				return
+			default:
 			}
-			return
+
+			log.Printf("第 %d 次尝试连接...", i+1)
+
+			// 使用正确的QUIC Dial函数签名
+			session, err := quic.Dial(ctx, udpConn, remoteAddr, clientTLSConf, quicConf)
+			if err != nil {
+				lastErr = err
+				log.Printf("第 %d 次连接失败: %v", i+1, err)
+				time.Sleep(2 * time.Second)
+				continue
+			}
+
+			log.Printf("成功建立出站QUIC连接，本地地址: %s, 远程地址: %s",
+				session.LocalAddr().String(), session.RemoteAddr().String())
+			select {
+			case connChan <- session:
+				return
+			case <-ctx.Done():
+				if err := session.CloseWithError(quic.ApplicationErrorCode(0), "timeout"); err != nil {
+					log.Printf("关闭会话失败: %v", err)
+				}
+				return
+			}
 		}
 
-		log.Printf("成功建立出站QUIC连接")
-		select {
-		case connChan <- session:
-		case <-ctx.Done():
-			if err := session.CloseWithError(quic.ApplicationErrorCode(0), "timeout"); err != nil {
-				log.Printf("关闭会话失败: %v", err)
-			}
+		if ctx.Err() == nil && lastErr != nil {
+			errChan <- fmt.Errorf("所有连接尝试均失败，最后错误: %w", lastErr)
 		}
 	}()
 
 	// 等待连接建立或超时
-	select {
-	case session := <-connChan:
-		log.Println("P2P QUIC连接已成功建立！")
-		return session
-	case err := <-errChan:
-		log.Printf("连接失败: %v", err)
-		// 继续等待另一个goroutine
+	log.Printf("等待P2P连接建立...")
+	for {
 		select {
 		case session := <-connChan:
-			log.Println("P2P QUIC连接已成功建立！")
+			log.Printf("P2P QUIC连接已成功建立！连接信息: 本地=%s, 远程=%s",
+				session.LocalAddr().String(), session.RemoteAddr().String())
+			close(punchDone) // 停止打洞
 			return session
+		case err := <-errChan:
+			log.Printf("连接过程中出现错误: %v", err)
+			// 不立即返回，继续等待其他goroutine
 		case <-ctx.Done():
-			log.Printf("连接超时: 30秒内未能建立连接")
+			log.Printf("连接超时: 60秒内未能建立P2P连接")
+			close(punchDone) // 停止打洞
 			return nil
 		}
-	case <-ctx.Done():
-		log.Printf("连接超时: 30秒内未能建立连接")
-		return nil
 	}
 }
 
