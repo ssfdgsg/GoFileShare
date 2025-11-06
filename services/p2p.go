@@ -20,6 +20,7 @@ import (
     "net/http"
     "os"
     "strconv"
+    "strings"
     "time"
 
     "github.com/denisbrodbeck/machineid"
@@ -36,9 +37,11 @@ type RegisterData struct {
     Timestamp int64  `json:"timestamp"`  // 时间戳
 }
 type P2PService struct {
-    OutIP   string
-    OutPort string
-    Key     string
+    OutIP      string
+    OutPort    string
+    Key        string
+    listener   *net.UDPConn
+    listenerDone chan struct{}
 }
 
 type TargetClient struct {
@@ -47,6 +50,82 @@ type TargetClient struct {
 }
 
 var GlobalP2PClient *P2PService
+
+// StartReadResponseListener 启动响应监听器
+func (p *P2PService) StartReadResponseListener() error {
+    if p.listener != nil {
+        return fmt.Errorf("监听器已在运行")
+    }
+
+    portInt, err := strconv.Atoi(p.OutPort)
+    if err != nil {
+        return fmt.Errorf("端口转换失败: %w", err)
+    }
+
+    localAddr := &net.UDPAddr{
+        IP:   net.ParseIP("0.0.0.0"),
+        Port: portInt,
+    }
+
+    listener, err := net.ListenUDP("udp", localAddr)
+    if err != nil {
+        return fmt.Errorf("无法监听UDP端口 %d: %w", portInt, err)
+    }
+
+    p.listener = listener
+    p.listenerDone = make(chan struct{})
+
+    go p.handleReadResponses()
+    log.Printf("P2P响应监听器已启动，监听端口: %d", portInt)
+
+    return nil
+}
+
+// handleReadResponses 处理传入的响应
+func (p *P2PService) handleReadResponses() {
+    defer close(p.listenerDone)
+    defer p.listener.Close()
+
+    buffer := make([]byte, 1024)
+    for {
+        select {
+        case <-p.listenerDone:
+            return
+        default:
+        }
+
+        p.listener.SetReadDeadline(time.Now().Add(5 * time.Second))
+        n, remoteAddr, err := p.listener.ReadFromUDP(buffer)
+        if err != nil {
+            if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+                continue
+            }
+            log.Printf("读取UDP数据失败: %v", err)
+            continue
+        }
+
+        data := string(buffer[:n])
+        log.Printf("收到来自 %s 的消息: %s", remoteAddr.String(), data)
+
+        if strings.Contains(data, "P2P Connection Test") {
+            response := []byte("P2P Connection Response from " + p.Key)
+            _, err := p.listener.WriteToUDP(response, remoteAddr)
+            if err != nil {
+                log.Printf("发送响应失败: %v", err)
+            } else {
+                log.Printf("向 %s 发送响应成功", remoteAddr.String())
+            }
+        }
+    }
+}
+
+// StopReadResponseListener 停止响应监听器
+func (p *P2PService) StopReadResponseListener() {
+    if p.listener != nil {
+        close(p.listenerDone)
+        p.listener = nil
+    }
+}
 
 // Register 向P2P服务器注册自己的信息
 func (p *P2PService) Register() error {
@@ -96,6 +175,10 @@ func (p *P2PService) Register() error {
 
     if resp.StatusCode != http.StatusOK {
         return fmt.Errorf("服务器返回错误状态码: %d", resp.StatusCode)
+    }
+
+    if err := p.StartReadResponseListener(); err != nil {
+        log.Printf("启动响应监听器失败: %v", err)
     }
 
     return nil
@@ -259,24 +342,51 @@ func (p *P2PService) ConnectPeerTest(holePunchInfo *models.HolePunchInfo) error 
     if holePunchInfo == nil || !holePunchInfo.HasRequest {
         return fmt.Errorf("无效的打洞信息")
     }
-    conn, err := net.Dial("UDP", holePunchInfo.ExternalIP+":"+holePunchInfo.ExternalPort)
+    
+    localAddr, err := net.ResolveUDPAddr("udp", "0.0.0.0:0")
     if err != nil {
-        return fmt.Errorf("连接目标客户端失败: %w", err)
+        return fmt.Errorf("解析本地地址失败: %w", err)
     }
-    defer conn.Close()
+    
+    listener, err := net.ListenUDP("udp", localAddr)
+    if err != nil {
+        return fmt.Errorf("创建本地UDP监听器失败: %w", err)
+    }
+    defer listener.Close()
+    
+    remoteAddr, err := net.ResolveUDPAddr("udp", holePunchInfo.ExternalIP+":"+holePunchInfo.ExternalPort)
+    if err != nil {
+        return fmt.Errorf("解析远程地址失败: %w", err)
+    }
+    
+    respChan := make(chan []byte, 1)
+    errChan := make(chan error, 1)
+    
+    go func() {
+        buffer := make([]byte, 1024)
+        n, _, err := listener.ReadFromUDP(buffer)
+        if err != nil {
+            errChan <- err
+            return
+        }
+        respChan <- buffer[:n]
+    }()
+    
     message := []byte("P2P Connection Test from " + p.Key)
-    _, err = conn.Write(message)
+    _, err = listener.WriteToUDP(message, remoteAddr)
     if err != nil {
-        return err
+        return fmt.Errorf("发送打洞消息失败: %w", err)
     }
-    buffer := make([]byte, 1024)
-    _, err = conn.Read(buffer)
-    if err != nil {
-        return err
+    
+    select {
+    case resp := <-respChan:
+        fmt.Println("Received:", string(resp))
+        return nil
+    case err := <-errChan:
+        return fmt.Errorf("读取响应失败: %w", err)
+    case <-time.After(5 * time.Second):
+        return fmt.Errorf("等待响应超时")
     }
-
-    fmt.Println("Received:", string(buffer))
-    return nil
 }
 
 func (tc *TargetClient) EchoPeer() {
