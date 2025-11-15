@@ -73,6 +73,32 @@ func SetupRouter() *gin.Engine {
 		private.POST("/api/p2p/connect", controllers.ConnectP2P)
 		private.POST("/api/p2p/test", controllers.TestP2PConnection)
 		private.GET("/api/p2p/status", controllers.GetP2PStatus)
+
+		// 混合P2P功能（WebRTC + QUIC）
+		private.POST("/api/p2p/hybrid-connect", controllers.ConnectP2PHybrid)
+		private.GET("/api/p2p/methods", controllers.GetP2PConnectionMethods)
+		private.POST("/api/p2p/test-methods", controllers.TestP2PMethods)
+		private.GET("/api/p2p/info", controllers.QueryP2PConnectionInfo)
+
+		// WebRTC功能
+		private.POST("/api/webrtc/init", controllers.InitWebRTC)
+		private.POST("/api/webrtc/offer", controllers.CreateWebRTCOffer)
+		private.POST("/api/webrtc/answer", controllers.HandleWebRTCAnswer)
+		private.POST("/api/webrtc/remote-offer", controllers.HandleWebRTCRemoteOffer)
+		private.POST("/api/webrtc/candidate", controllers.AddWebRTCCandidate)
+		private.GET("/api/webrtc/candidates", controllers.GetWebRTCCandidates)
+		private.GET("/api/webrtc/status", controllers.GetWebRTCStatus)
+		private.POST("/api/webrtc/message", controllers.SendWebRTCMessage)
+		private.POST("/api/webrtc/close", controllers.CloseWebRTC)
+
+		// WebRTC信令功能
+		private.POST("/api/signaling/register", controllers.RegisterSignalingClient)
+		private.GET("/api/signaling/client-info", controllers.GetSignalingClientInfo)
+		private.POST("/api/signaling/offer", controllers.ExchangeWebRTCOffer)
+		private.POST("/api/signaling/answer", controllers.ExchangeWebRTCAnswer)
+		private.POST("/api/signaling/candidate", controllers.ExchangeICECandidate)
+		private.GET("/api/signaling/messages", controllers.GetSignalingMessages)
+		private.POST("/api/signaling/unregister", controllers.UnregisterSignalingClient)
 	}
 
 	return r
