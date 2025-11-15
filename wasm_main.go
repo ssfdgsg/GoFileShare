@@ -32,7 +32,7 @@ func initWASMClient() js.Func {
 		}
 
 		clientID := args[0].String()
-		
+
 		// 使用Google STUN服务器初始化P2P连接管理器
 		stunServer := "stun.l.google.com:19302"
 		manager, err := services.NewP2PConnectionManager(stunServer, clientID)
@@ -193,9 +193,9 @@ func isConnectedToPeerWASM() js.Func {
 		isConnected := wasmClient.p2pManager.IsConnectedToPeer(peerID)
 
 		return map[string]interface{}{
-			"success":     true,
-			"connected":   isConnected,
-			"peerID":      peerID,
+			"success":   true,
+			"connected": isConnected,
+			"peerID":    peerID,
 		}
 	})
 }
