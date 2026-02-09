@@ -3,201 +3,510 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>P2P调试界面 (简化版)</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <title>P2P调试 - 云端文件系统</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
         :root {
-            --bg-color: #111827;
-            --card-bg-color: #1f2937;
-            --text-color: #d1d5db;
-            --header-color: #ffffff;
-            --border-color: #374151;
-            --log-info: #38bdf8;
-            --log-success: #34d399;
-            --log-error: #f87171;
-            --log-warn: #fbbF59;
+            --primary: #6366f1;
+            --primary-dark: #4f46e5;
+            --primary-light: #818cf8;
+            --secondary: #ec4899;
+            --success: #10b981;
+            --error: #ef4444;
+            --warning: #f59e0b;
+            --info: #3b82f6;
+            --dark: #0f172a;
+            --dark-light: #1e293b;
+            --gray: #64748b;
+            --gray-light: #cbd5e1;
+            --gray-lighter: #f1f5f9;
+            --white: #ffffff;
+            --bg: #f8fafc;
         }
+
         body {
-            background-color: var(--bg-color);
-            color: var(--text-color);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: var(--bg);
+            color: var(--dark);
+            line-height: 1.6;
         }
+
+        .header {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            color: var(--white);
+            padding: 0;
+            box-shadow: 0 4px 20px rgba(99, 102, 241, 0.2);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .header-content {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px 32px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 24px;
+        }
+
+        .logo {
+            font-size: 24px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .user-section {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .user-info {
+            padding: 8px 16px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            font-size: 14px;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            text-decoration: none;
+            transition: all 0.3s;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-family: inherit;
+        }
+
+        .btn-white {
+            background: var(--white);
+            color: var(--primary);
+        }
+
+        .btn-white:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(255, 255, 255, 0.3);
+        }
+
+        .btn-outline-white {
+            background: transparent;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            color: var(--white);
+        }
+
+        .btn-outline-white:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: var(--white);
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            color: var(--white);
+            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(99, 102, 241, 0.4);
+        }
+
+        .btn-success {
+            background: var(--success);
+            color: var(--white);
+        }
+
+        .btn-success:hover:not(:disabled) {
+            background: #059669;
+            transform: translateY(-2px);
+        }
+
+        .btn-info {
+            background: var(--info);
+            color: var(--white);
+        }
+
+        .btn-info:hover:not(:disabled) {
+            background: #2563eb;
+            transform: translateY(-2px);
+        }
+
+        .btn-warning {
+            background: var(--warning);
+            color: var(--white);
+        }
+
+        .btn-warning:hover:not(:disabled) {
+            background: #d97706;
+            transform: translateY(-2px);
+        }
+
+        .btn-outline {
+            background: transparent;
+            border: 2px solid var(--gray-light);
+            color: var(--dark);
+        }
+
+        .btn-outline:hover:not(:disabled) {
+            background: var(--gray-lighter);
+            border-color: var(--gray);
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .spinner {
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-top-color: var(--white);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 32px;
+        }
+
+        .grid {
+            display: grid;
+            gap: 24px;
+            margin-bottom: 24px;
+        }
+
+        .grid-3 {
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+        }
+
         .card {
-            background-color: var(--card-bg-color);
-            border: 1px solid var(--border-color);
+            background: var(--white);
+            border-radius: 16px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+            padding: 24px;
         }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+
+        .card-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--dark);
+        }
+
+        .card-description {
+            font-size: 14px;
+            color: var(--gray);
+            margin-bottom: 20px;
+            line-height: 1.6;
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid var(--gray-light);
+            border-radius: 10px;
+            font-size: 14px;
+            font-family: inherit;
+            transition: all 0.3s;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1);
+        }
+
+        .button-group {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .info-box {
+            background: var(--gray-lighter);
+            border-radius: 12px;
+            padding: 16px;
+            margin-top: 16px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 13px;
+        }
+
+        .info-box.hidden {
+            display: none;
+        }
+
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid var(--gray-light);
+        }
+
+        .info-row:last-child {
+            border-bottom: none;
+        }
+
+        .info-label {
+            color: var(--gray);
+        }
+
+        .info-value {
+            color: var(--dark);
+            font-weight: 600;
+        }
+
+        .status-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+
+        .status-unknown { background-color: var(--gray); }
+        .status-active { background-color: var(--success); }
+        .status-error { background-color: var(--error); }
+
         #logContainer {
-            background-color: #000;
-            font-family: 'SF Mono', 'Courier New', monospace;
-            height: 300px;
+            background-color: var(--dark);
+            border-radius: 12px;
+            padding: 16px;
+            height: 400px;
+            overflow-y: auto;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 13px;
         }
+
         .log-entry {
-            padding: 4px 12px;
-            border-bottom: 1px solid var(--border-color);
+            padding: 4px 0;
+            line-height: 1.6;
         }
-        .log-info { color: var(--log-info); }
-        .log-success { color: var(--log-success); }
-        .log-error { color: var(--log-error); }
-        .log-warn { color: var(--log-warn); }
+
+        .log-timestamp {
+            color: var(--gray);
+        }
+
+        .log-info { color: #3b82f6; }
+        .log-success { color: #10b981; }
+        .log-error { color: #ef4444; }
+        .log-warn { color: #f59e0b; }
+
+        @media (max-width: 768px) {
+            .header-content {
+                flex-direction: column;
+                align-items: flex-start;
+                padding: 16px 20px;
+            }
+
+            .user-section {
+                width: 100%;
+                justify-content: space-between;
+            }
+
+            .container {
+                padding: 20px;
+            }
+
+            .button-group {
+                width: 100%;
+            }
+
+            .button-group .btn {
+                flex: 1;
+            }
+        }
     </style>
 </head>
 <body>
-    <div class="container mx-auto px-4 py-8">
-        <!-- 头部 -->
-        <header class="flex justify-between items-center mb-8">
-            <div>
-                <h1 class="text-3xl font-bold text-header-color">P2P调试界面</h1>
-                <p class="text-gray-400">当前用户: <span class="font-semibold">{{.username}}</span></p>
+    <header class="header">
+        <div class="header-content">
+            <div class="logo">
+                <span>🔗</span>
+                <span>P2P调试界面</span>
             </div>
-            <div class="flex space-x-4">
-                <a href="/home" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition">返回主页</a>
-                <a href="/logout" class="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition">退出登录</a>
+            <div class="user-section">
+                <div class="user-info">👤 {{.username}}</div>
+                <a href="/home" class="btn btn-white">📁 主页</a>
+                <a href="/logout" class="btn btn-outline-white">退出</a>
             </div>
-        </header>
+        </div>
+    </header>
 
-        <!-- 操作面板 -->
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-            <!-- 注册到服务器 -->
-            <div class="card rounded-lg shadow-lg p-6">
-                <h3 class="text-lg font-bold mb-4 text-header-color">1. 注册到信令服务器</h3>
-                <p class="text-sm text-gray-400 mb-4">点击按钮，将你的网络信息注册到P2P服务器。服务器会自动为你生成一个唯一的节点密钥。</p>
-                <button id="registerBtn" class="w-full bg-indigo-600 text-white py-3 rounded-lg hover:bg-indigo-700 transition flex items-center justify-center">
-                    <svg id="regSpinner" class="animate-spin -ml-1 mr-3 h-5 w-5 text-white hidden" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
+    <div class="container">
+        <div class="grid grid-3">
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">1️⃣ 注册到服务器</h3>
+                </div>
+                <p class="card-description">将你的网络信息注册到P2P服务器，服务器会自动生成唯一的节点密钥。</p>
+                <button id="registerBtn" class="btn btn-success" style="width: 100%;">
                     <span id="regBtnText">注册</span>
                 </button>
-                <div id="statusInfo" class="mt-4 p-3 bg-gray-900 rounded-lg text-xs font-mono hidden">
-                    <div><span class="text-gray-400">密钥:</span> <span id="nodeKey" class="text-green-400"></span></div>
-                    <div><span class="text-gray-400">外网IP:</span> <span id="externalIP" class="text-blue-400"></span></div>
-                    <div><span class="text-gray-400">外网端口:</span> <span id="externalPort" class="text-yellow-400"></span></div>
-                </div>
-            </div>
-
-            <!-- 查询节点 -->
-            <div class="card rounded-lg shadow-lg p-6">
-                <h3 class="text-lg font-bold mb-4 text-header-color">2. 查询P2P节点信息</h3>
-                <p class="text-sm text-gray-400 mb-4">输入目标节点的密钥，从服务器获取其用于P2P连接的网络地址信息。</p>
-                <div class="flex space-x-2 mb-3">
-                    <input type="text" id="queryKey" placeholder="输入目标节点密钥" class="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    <button id="queryBtn" class="bg-blue-600 text-white py-3 px-6 rounded-lg hover:bg-blue-700 transition flex items-center justify-center">
-                        <svg id="querySpinner" class="animate-spin -ml-1 mr-3 h-5 w-5 text-white hidden" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                        <span id="queryBtnText">查询</span>
-                    </button>
-                </div>
-                <div id="queryResult" class="mt-4 p-3 bg-black rounded-lg hidden text-sm font-mono"></div>
-            </div>
-
-            <!-- P2P连接测试 -->
-            <div class="card rounded-lg shadow-lg p-6">
-                <h3 class="text-lg font-bold mb-4 text-header-color">3. P2P连接测试</h3>
-                <p class="text-sm text-gray-400 mb-4">测试与目标节点的P2P连接状态，包括UDP打洞和QUIC连接建立。</p>
-                <div class="space-y-3">
-                    <input type="text" id="testKey" placeholder="输入目标节点密钥" class="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500">
-                    <div class="flex space-x-2">
-                        <button id="testConnBtn" class="flex-1 bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700 transition flex items-center justify-center">
-                            <svg id="testSpinner" class="animate-spin -ml-1 mr-2 h-4 w-4 text-white hidden" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                            </svg>
-                            <span id="testBtnText">测试连接</span>
-                        </button>
-                        <button id="connectBtn" class="flex-1 bg-purple-600 text-white py-2 px-4 rounded-lg hover:bg-purple-700 transition flex items-center justify-center">
-                            <svg id="connectSpinner" class="animate-spin -ml-1 mr-2 h-4 w-4 text-white hidden" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                            </svg>
-                            <span id="connectBtnText">建立连接</span>
-                        </button>
+                <div id="statusInfo" class="info-box hidden">
+                    <div class="info-row">
+                        <span class="info-label">密钥:</span>
+                        <span id="nodeKey" class="info-value"></span>
                     </div>
+                    <div class="info-row">
+                        <span class="info-label">外网IP:</span>
+                        <span id="externalIP" class="info-value"></span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">外网端口:</span>
+                        <span id="externalPort" class="info-value"></span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">2️⃣ 查询节点信息</h3>
+                </div>
+                <p class="card-description">输入目标节点的密钥，从服务器获取其网络地址信息。</p>
+                <div class="form-group">
+                    <input type="text" id="queryKey" placeholder="输入目标节点密钥">
+                </div>
+                <button id="queryBtn" class="btn btn-info" style="width: 100%;">
+                    <span id="queryBtnText">查询</span>
+                </button>
+                <div id="queryResult" class="info-box hidden"></div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">3️⃣ P2P连接测试</h3>
+                </div>
+                <p class="card-description">测试与目标节点的P2P连接状态，包括UDP打洞和QUIC连接。</p>
+                <div class="form-group">
+                    <input type="text" id="testKey" placeholder="输入目标节点密钥">
+                </div>
+                <div class="button-group">
+                    <button id="testConnBtn" class="btn btn-success" style="flex: 1;">
+                        <span id="testBtnText">测试连接</span>
+                    </button>
+                    <button id="connectBtn" class="btn btn-warning" style="flex: 1;">
+                        <span id="connectBtnText">建立连接</span>
+                    </button>
                 </div>
             </div>
         </div>
 
-        <!-- P2P状态面板 -->
-        <div class="card rounded-lg shadow-lg p-6 mb-8">
-            <div class="flex justify-between items-center mb-4">
-                <h3 class="text-lg font-bold text-header-color">P2P状态</h3>
-                <button id="refreshStatusBtn" class="bg-gray-600 text-white px-3 py-1 rounded-md text-sm hover:bg-gray-700">刷新状态</button>
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">📊 P2P状态</h3>
+                <button id="refreshStatusBtn" class="btn btn-outline">🔄 刷新</button>
             </div>
-            <div id="p2pStatus" class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div class="p-4 bg-gray-900 rounded-lg">
-                    <h4 class="font-semibold text-gray-300 mb-2">服务状态</h4>
-                    <div id="serviceStatus" class="text-sm">
-                        <span class="inline-block w-3 h-3 bg-gray-500 rounded-full mr-2"></span>
+            <div class="grid grid-3">
+                <div class="info-box">
+                    <h4 style="font-weight: 600; margin-bottom: 12px;">服务状态</h4>
+                    <div id="serviceStatus" class="status-indicator">
+                        <span class="status-dot status-unknown"></span>
                         <span>未知</span>
                     </div>
                 </div>
-                <div class="p-4 bg-gray-900 rounded-lg">
-                    <h4 class="font-semibold text-gray-300 mb-2">连接统计</h4>
-                    <div id="connectionStats" class="text-sm text-gray-400">
-                        <div>活跃连接: <span id="activeConnections">0</span></div>
-                        <div>总连接数: <span id="totalConnections">0</span></div>
+                <div class="info-box">
+                    <h4 style="font-weight: 600; margin-bottom: 12px;">连接统计</h4>
+                    <div style="font-size: 13px;">
+                        <div>活跃连接: <strong id="activeConnections">0</strong></div>
+                        <div>总连接数: <strong id="totalConnections">0</strong></div>
                     </div>
                 </div>
-                <div class="p-4 bg-gray-900 rounded-lg">
-                    <h4 class="font-semibold text-gray-300 mb-2">网络信息</h4>
-                    <div id="networkInfo" class="text-sm text-gray-400">
-                        <div>NAT类型: <span id="natType">未知</span></div>
-                        <div>延迟: <span id="latency">-</span></div>
+                <div class="info-box">
+                    <h4 style="font-weight: 600; margin-bottom: 12px;">网络信息</h4>
+                    <div style="font-size: 13px;">
+                        <div>NAT类型: <strong id="natType">未知</strong></div>
+                        <div>延迟: <strong id="latency">-</strong></div>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- 操作日志 -->
-        <div class="card rounded-lg shadow-lg p-6">
-            <div class="flex justify-between items-center mb-4">
-                <h3 class="text-lg font-bold text-header-color">操作日志</h3>
-                <button id="clearLogBtn" class="bg-gray-600 text-white px-3 py-1 rounded-md text-sm hover:bg-gray-700">清空日志</button>
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">📝 操作日志</h3>
+                <button id="clearLogBtn" class="btn btn-outline">🗑️ 清空</button>
             </div>
-            <div id="logContainer" class="p-2 rounded-lg overflow-y-auto text-sm"></div>
+            <div id="logContainer"></div>
         </div>
     </div>
 
     <script>
         document.addEventListener('DOMContentLoaded', () => {
-            // --- DOM Elements ---
             const registerBtn = document.getElementById('registerBtn');
-            const regSpinner = document.getElementById('regSpinner');
             const regBtnText = document.getElementById('regBtnText');
 
             const queryBtn = document.getElementById('queryBtn');
             const queryKeyInput = document.getElementById('queryKey');
-            const querySpinner = document.getElementById('querySpinner');
             const queryBtnText = document.getElementById('queryBtnText');
             const queryResultDiv = document.getElementById('queryResult');
 
             const testConnBtn = document.getElementById('testConnBtn');
             const connectBtn = document.getElementById('connectBtn');
-            const testSpinner = document.getElementById('testSpinner');
-            const connectSpinner = document.getElementById('connectSpinner');
             const testBtnText = document.getElementById('testBtnText');
             const connectBtnText = document.getElementById('connectBtnText');
 
             const logContainer = document.getElementById('logContainer');
             const clearLogBtn = document.getElementById('clearLogBtn');
 
-            // --- Logger ---
             const log = (message, type = 'info') => {
                 const timestamp = new Date().toLocaleTimeString();
                 const entry = document.createElement('div');
                 entry.className = `log-entry log-${type}`;
-                entry.innerHTML = `<span class="text-gray-500 mr-2">[${timestamp}]</span> ${message}`;
+                entry.innerHTML = `<span class="log-timestamp">[${timestamp}]</span> ${message}`;
                 logContainer.appendChild(entry);
                 logContainer.scrollTop = logContainer.scrollHeight;
             };
 
-            // --- API Callers ---
+            const setLoading = (button, textElement, loading, loadingText, defaultText) => {
+                button.disabled = loading;
+                if (loading) {
+                    textElement.innerHTML = `<div class="spinner"></div><span>${loadingText}</span>`;
+                } else {
+                    textElement.textContent = defaultText;
+                }
+            };
+
             const registerToServer = async () => {
-                setLoadingState(registerBtn, regSpinner, regBtnText, true, '注册中...');
+                setLoading(registerBtn, regBtnText, true, '注册中...', '注册');
                 log('正在向服务器注册...', 'info');
                 try {
-                    // Per controller logic, 'key' is required but its value is not used for generation.
-                    // We send a dummy key to satisfy the backend validation.
                     const formData = new FormData();
                     formData.append('key', 'dummy_key_not_used');
 
@@ -212,7 +521,6 @@
                     }
                     
                     log('服务器注册成功!', 'success');
-                    // Update status info
                     document.getElementById('nodeKey').textContent = data.key || '未返回';
                     document.getElementById('externalIP').textContent = data.ip || '未返回';
                     document.getElementById('externalPort').textContent = data.port || '未返回';
@@ -221,7 +529,7 @@
                 } catch (error) {
                     log(`注册失败: ${error.message}`, 'error');
                 } finally {
-                    setLoadingState(registerBtn, regSpinner, regBtnText, false, '注册');
+                    setLoading(registerBtn, regBtnText, false, '', '注册');
                 }
             };
 
@@ -231,7 +539,7 @@
                     log('请输入要查询的节点密钥', 'warn');
                     return;
                 }
-                setLoadingState(queryBtn, querySpinner, queryBtnText, true, '查询中...');
+                setLoading(queryBtn, queryBtnText, true, '查询中...', '查询');
                 log(`正在查询节点: ${key}...`, 'info');
                 try {
                     const response = await fetch(`/api/p2p/query?key=${encodeURIComponent(key)}`);
@@ -249,7 +557,7 @@
                     log(`查询失败: ${error.message}`, 'error');
                     queryResultDiv.classList.add('hidden');
                 } finally {
-                    setLoadingState(queryBtn, querySpinner, queryBtnText, false, '查询');
+                    setLoading(queryBtn, queryBtnText, false, '', '查询');
                 }
             };
 
@@ -259,7 +567,7 @@
                     log('请输入要测试的节点密钥', 'warn');
                     return;
                 }
-                setLoadingState(testConnBtn, testSpinner, testBtnText, true, '测试中...');
+                setLoading(testConnBtn, testBtnText, true, '测试中...', '测试连接');
                 log(`正在测试与节点 ${key} 的连接...`, 'info');
                 try {
                     const formData = new FormData();
@@ -279,7 +587,7 @@
                 } catch (error) {
                     log(`连接测试失败: ${error.message}`, 'error');
                 } finally {
-                    setLoadingState(testConnBtn, testSpinner, testBtnText, false, '测试连接');
+                    setLoading(testConnBtn, testBtnText, false, '', '测试连接');
                 }
             };
 
@@ -289,7 +597,7 @@
                     log('请输入要连接的节点密钥', 'warn');
                     return;
                 }
-                setLoadingState(connectBtn, connectSpinner, connectBtnText, true, '连接中...');
+                setLoading(connectBtn, connectBtnText, true, '连接中...', '建立连接');
                 log(`正在尝试与节点 ${key} 建立P2P连接...`, 'info');
                 try {
                     const formData = new FormData();
@@ -312,7 +620,7 @@
                 } catch (error) {
                     log(`连接建立失败: ${error.message}`, 'error');
                 } finally {
-                    setLoadingState(connectBtn, connectSpinner, connectBtnText, false, '建立连接');
+                    setLoading(connectBtn, connectBtnText, false, '', '建立连接');
                 }
             };
 
@@ -327,15 +635,11 @@
                     }
 
                     const serviceStatusEl = document.getElementById('serviceStatus');
-                    const activeConnectionsEl = document.getElementById('activeConnections');
-                    const totalConnectionsEl = document.getElementById('totalConnections');
-                    const natTypeEl = document.getElementById('natType');
 
                     if (data.status === 'success' && data.data.initialized) {
-                        serviceStatusEl.innerHTML = '<span class="inline-block w-3 h-3 bg-green-500 rounded-full mr-2"></span>已初始化';
+                        serviceStatusEl.innerHTML = '<span class="status-dot status-active"></span><span>已初始化</span>';
                         log('P2P服务状态: 已初始化', 'success');
 
-                        // Update node info if available
                         if (data.data.key) {
                             document.getElementById('nodeKey').textContent = data.data.key;
                             document.getElementById('externalIP').textContent = data.data.external_ip || '未知';
@@ -343,37 +647,14 @@
                             document.getElementById('statusInfo').classList.remove('hidden');
                         }
                     } else {
-                        serviceStatusEl.innerHTML = '<span class="inline-block w-3 h-3 bg-red-500 rounded-full mr-2"></span>未初始化';
+                        serviceStatusEl.innerHTML = '<span class="status-dot status-error"></span><span>未初始化</span>';
                         log('P2P服务状态: 未初始化', 'warn');
                     }
-
-                    // Update connection stats (placeholder - would need backend support)
-                    activeConnectionsEl.textContent = '0';
-                    totalConnectionsEl.textContent = '0';
-                    natTypeEl.textContent = '未检测';
 
                 } catch (error) {
                     log(`状态刷新失败: ${error.message}`, 'error');
                     const serviceStatusEl = document.getElementById('serviceStatus');
-                    serviceStatusEl.innerHTML = '<span class="inline-block w-3 h-3 bg-red-500 rounded-full mr-2"></span>错误';
-                }
-            };
-
-            // --- UI Helpers ---
-            const setLoadingState = (button, spinner, textElement, isLoading, loadingText) => {
-                button.disabled = isLoading;
-                if (isLoading) {
-                    spinner.classList.remove('hidden');
-                    textElement.textContent = loadingText;
-                    button.classList.add('opacity-50', 'cursor-not-allowed');
-                } else {
-                    spinner.classList.add('hidden');
-                    button.classList.remove('opacity-50', 'cursor-not-allowed');
-                    // Reset text based on button type
-                    if (button.id === 'registerBtn') textElement.textContent = '注册';
-                    else if (button.id === 'queryBtn') textElement.textContent = '查询';
-                    else if (button.id === 'testConnBtn') textElement.textContent = '测试连接';
-                    else if (button.id === 'connectBtn') textElement.textContent = '建立连接';
+                    serviceStatusEl.innerHTML = '<span class="status-dot status-error"></span><span>错误</span>';
                 }
             };
 
@@ -382,7 +663,6 @@
                 log('日志已清空', 'info');
             };
 
-            // --- Event Listeners ---
             registerBtn.addEventListener('click', registerToServer);
             queryBtn.addEventListener('click', queryPeer);
             testConnBtn.addEventListener('click', testConnection);
@@ -397,8 +677,7 @@
             });
             clearLogBtn.addEventListener('click', clearLogs);
 
-            // --- Initialize ---
-            refreshP2PStatus(); // Load initial status
+            refreshP2PStatus();
             log('P2P调试界面已加载完成', 'success');
             log('提示: 请先点击"注册"按钮初始化P2P服务', 'info');
         });

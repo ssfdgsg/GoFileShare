@@ -3,7 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{.title}}</title>
+    <title>{{.title}} - 云端文件系统</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
         * {
             margin: 0;
@@ -11,133 +14,250 @@
             box-sizing: border-box;
         }
 
+        :root {
+            --primary: #6366f1;
+            --primary-dark: #4f46e5;
+            --primary-light: #818cf8;
+            --secondary: #ec4899;
+            --success: #10b981;
+            --error: #ef4444;
+            --warning: #f59e0b;
+            --info: #3b82f6;
+            --dark: #0f172a;
+            --dark-light: #1e293b;
+            --gray: #64748b;
+            --gray-light: #cbd5e1;
+            --gray-lighter: #f1f5f9;
+            --white: #ffffff;
+            --bg: #f8fafc;
+        }
+
         body {
-            font-family: 'Microsoft YaHei', Arial, sans-serif;
-            background-color: #f5f5f5;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: var(--bg);
+            color: var(--dark);
+            line-height: 1.6;
         }
 
         .header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 1rem 2rem;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            color: var(--white);
+            padding: 0;
+            box-shadow: 0 4px 20px rgba(99, 102, 241, 0.2);
+            position: sticky;
+            top: 0;
+            z-index: 100;
         }
 
         .header-content {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px 32px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            max-width: 1200px;
-            margin: 0 auto;
+            gap: 24px;
         }
 
         .logo {
-            font-size: 1.5rem;
-            font-weight: bold;
+            font-size: 24px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .user-section {
+            display: flex;
+            align-items: center;
+            gap: 16px;
         }
 
         .user-info {
             display: flex;
             align-items: center;
-            gap: 1rem;
+            gap: 12px;
+            padding: 8px 16px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            font-size: 14px;
         }
 
         .btn {
-            padding: 0.5rem 1rem;
+            padding: 10px 20px;
             border: none;
-            border-radius: 4px;
+            border-radius: 10px;
             cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
             text-decoration: none;
             transition: all 0.3s;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-family: inherit;
+        }
+
+        .btn-white {
+            background: var(--white);
+            color: var(--primary);
+        }
+
+        .btn-white:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(255, 255, 255, 0.3);
+        }
+
+        .btn-outline-white {
+            background: transparent;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            color: var(--white);
+        }
+
+        .btn-outline-white:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: var(--white);
         }
 
         .btn-primary {
-            background-color: #007bff;
-            color: white;
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            color: var(--white);
+            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
         }
 
-        .btn-secondary {
-            background-color: #6c757d;
-            color: white;
+        .btn-primary:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(99, 102, 241, 0.4);
         }
 
-        .btn:hover {
-            opacity: 0.8;
-            transform: translateY(-1px);
+        .btn-success {
+            background: var(--success);
+            color: var(--white);
+        }
+
+        .btn-success:hover:not(:disabled) {
+            background: #059669;
+            transform: translateY(-2px);
+        }
+
+        .btn-danger {
+            background: var(--error);
+            color: var(--white);
+        }
+
+        .btn-danger:hover:not(:disabled) {
+            background: #dc2626;
+        }
+
+        .btn-outline {
+            background: transparent;
+            border: 2px solid var(--gray-light);
+            color: var(--dark);
+        }
+
+        .btn-outline:hover:not(:disabled) {
+            background: var(--gray-lighter);
+            border-color: var(--gray);
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
         }
 
         .container {
-            max-width: 1200px;
-            margin: 2rem auto;
-            padding: 0 1rem;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 32px;
         }
 
         .toolbar {
-            background: white;
-            padding: 1rem;
-            border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            margin-bottom: 1rem;
+            background: var(--white);
+            padding: 24px;
+            border-radius: 16px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+            margin-bottom: 24px;
             display: flex;
-            gap: 1rem;
+            gap: 16px;
             align-items: center;
+            flex-wrap: wrap;
         }
 
-        .file-upload {
+        .toolbar-actions {
             display: flex;
-            align-items: center;
-            gap: 0.5rem;
+            gap: 12px;
+            flex-wrap: wrap;
         }
 
         .search-box {
             display: flex;
-            align-items: center;
-            gap: 0.5rem;
+            gap: 12px;
             flex: 1;
+            min-width: 300px;
         }
 
         .search-box input {
             flex: 1;
-            padding: 0.5rem;
-            border: 1px solid #ccc;
-            border-radius: 4px;
+            padding: 12px 16px;
+            border: 2px solid var(--gray-light);
+            border-radius: 10px;
+            font-size: 14px;
+            font-family: inherit;
+            transition: all 0.3s;
+        }
+
+        .search-box input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1);
         }
 
         .breadcrumb {
-            background: white;
-            padding: 0.5rem 1rem;
-            border-radius: 8px;
-            margin-bottom: 1rem;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            background: var(--white);
+            padding: 16px 24px;
+            border-radius: 16px;
+            margin-bottom: 24px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+            font-size: 14px;
         }
 
         .breadcrumb a {
-            color: #007bff;
+            color: var(--primary);
             text-decoration: none;
-            margin-right: 0.5rem;
+            font-weight: 600;
+            transition: color 0.3s;
         }
 
         .breadcrumb a:hover {
-            text-decoration: underline;
+            color: var(--primary-dark);
+        }
+
+        .breadcrumb-separator {
+            color: var(--gray);
         }
 
         .file-list {
-            background: white;
-            border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            background: var(--white);
+            border-radius: 16px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
             overflow: hidden;
         }
 
         .file-item {
             display: flex;
             align-items: center;
-            padding: 1rem;
-            border-bottom: 1px solid #eee;
-            transition: background-color 0.3s;
+            padding: 20px 24px;
+            border-bottom: 1px solid var(--gray-lighter);
+            transition: all 0.3s;
+            gap: 16px;
         }
 
         .file-item:hover {
-            background-color: #f8f9fa;
+            background: var(--gray-lighter);
         }
 
         .file-item:last-child {
@@ -145,48 +265,64 @@
         }
 
         .file-icon {
-            width: 40px;
-            height: 40px;
-            margin-right: 1rem;
+            width: 56px;
+            height: 56px;
             display: flex;
             align-items: center;
             justify-content: center;
-            border-radius: 4px;
-            font-size: 1.2rem;
+            border-radius: 12px;
+            font-size: 28px;
+            flex-shrink: 0;
         }
 
         .folder-icon {
-            background-color: #ffc107;
-            color: white;
+            background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
         }
 
         .file-icon.file {
-            background-color: #28a745;
-            color: white;
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
         }
 
         .file-info {
             flex: 1;
+            min-width: 0;
         }
 
         .file-name {
-            font-weight: bold;
-            margin-bottom: 0.25rem;
+            font-weight: 600;
+            font-size: 16px;
+            margin-bottom: 4px;
             cursor: pointer;
+            color: var(--dark);
+            transition: color 0.3s;
+            word-break: break-word;
         }
 
         .file-name:hover {
-            color: #007bff;
+            color: var(--primary);
         }
 
         .file-meta {
-            font-size: 0.875rem;
-            color: #6c757d;
+            font-size: 13px;
+            color: var(--gray);
         }
 
         .file-actions {
             display: flex;
-            gap: 0.5rem;
+            gap: 8px;
+            flex-shrink: 0;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 80px 32px;
+            color: var(--gray);
+        }
+
+        .empty-state-icon {
+            font-size: 64px;
+            margin-bottom: 16px;
+            opacity: 0.5;
         }
 
         .modal {
@@ -197,299 +333,526 @@
             top: 0;
             width: 100%;
             height: 100%;
-            background-color: rgba(0,0,0,0.5);
+            background-color: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(4px);
+            animation: fadeIn 0.3s;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
         }
 
         .modal-content {
-            background-color: white;
-            margin: 10% auto;
-            padding: 2rem;
-            border-radius: 8px;
+            background-color: var(--white);
+            margin: 5% auto;
+            padding: 0;
+            border-radius: 20px;
             width: 90%;
-            max-width: 500px;
+            max-width: 540px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
 
         .modal-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 1rem;
+            padding: 24px 28px;
+            border-bottom: 1px solid var(--gray-lighter);
+        }
+
+        .modal-header h3 {
+            font-size: 20px;
+            font-weight: 700;
         }
 
         .close {
             cursor: pointer;
-            font-size: 1.5rem;
+            font-size: 28px;
+            color: var(--gray);
+            transition: color 0.3s;
+            background: none;
+            border: none;
+            padding: 0;
+            width: 36px;
+            height: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 8px;
+        }
+
+        .close:hover {
+            color: var(--dark);
+            background: var(--gray-lighter);
+        }
+
+        .modal-body {
+            padding: 28px;
         }
 
         .upload-area {
-            border: 2px dashed #ccc;
-            border-radius: 8px;
-            padding: 2rem;
+            border: 2px dashed var(--gray-light);
+            border-radius: 16px;
+            padding: 48px 32px;
             text-align: center;
             transition: all 0.3s;
+            cursor: pointer;
+        }
+
+        .upload-area:hover {
+            border-color: var(--primary);
+            background-color: rgba(99, 102, 241, 0.02);
         }
 
         .upload-area.dragover {
-            border-color: #007bff;
-            background-color: #f8f9fa;
+            border-color: var(--primary);
+            background-color: rgba(99, 102, 241, 0.05);
+        }
+
+        .upload-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+        }
+
+        .upload-area input[type="file"] {
+            display: none;
         }
 
         .progress-bar {
             width: 100%;
-            height: 20px;
-            background-color: #e9ecef;
-            border-radius: 10px;
+            height: 8px;
+            background-color: var(--gray-lighter);
+            border-radius: 4px;
             overflow: hidden;
-            margin-top: 1rem;
+            margin-top: 16px;
             display: none;
         }
 
         .progress-fill {
             height: 100%;
-            background-color: #28a745;
+            background: linear-gradient(90deg, var(--primary) 0%, var(--primary-light) 100%);
             transition: width 0.3s;
             width: 0%;
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: var(--dark);
+            font-size: 14px;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid var(--gray-light);
+            border-radius: 10px;
+            font-size: 15px;
+            font-family: inherit;
+            transition: all 0.3s;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1);
+        }
+
+        .modal-footer {
+            padding: 20px 28px;
+            border-top: 1px solid var(--gray-lighter);
+            display: flex;
+            justify-content: flex-end;
+            gap: 12px;
+        }
+
+        @media (max-width: 768px) {
+            .header-content {
+                flex-direction: column;
+                align-items: flex-start;
+                padding: 16px 20px;
+            }
+
+            .user-section {
+                width: 100%;
+                justify-content: space-between;
+            }
+
+            .container {
+                padding: 20px;
+            }
+
+            .toolbar {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .toolbar-actions {
+                width: 100%;
+            }
+
+            .search-box {
+                width: 100%;
+                min-width: 0;
+            }
+
+            .file-item {
+                flex-wrap: wrap;
+            }
+
+            .file-actions {
+                width: 100%;
+                justify-content: flex-end;
+            }
         }
     </style>
 </head>
 <body>
-<header class="header">
-    <div class="header-content">
-        <div class="logo">📁 文件管理系统</div>
-        <div class="user-info">
-            <span>欢迎, {{.username}}</span>
-            <span>|</span>
-            <span>登录时间: {{.loginTime}}</span>
-            <a href="/p2p-debug" class="btn btn-primary">P2P调试</a>
-            <a href="/logout" class="btn btn-secondary">退出登录</a>
+    <header class="header">
+        <div class="header-content">
+            <div class="logo">
+                <span>☁️</span>
+                <span>云端文件系统</span>
+            </div>
+            <div class="user-section">
+                <div class="user-info">
+                    <span>👤 {{.username}}</span>
+                    <span>|</span>
+                    <span>🕐 {{.loginTime}}</span>
+                </div>
+                <a href="/p2p-debug" class="btn btn-white">🔗 P2P</a>
+                <a href="/logout" class="btn btn-outline-white">退出</a>
+            </div>
         </div>
-    </div>
-</header>
+    </header>
 
-<div class="container">
-    <div class="toolbar">
-        <div class="file-upload">
-            <input type="file" id="fileInput" multiple style="display: none;" onchange="uploadFiles()">
-            <button class="btn btn-primary" onclick="showUploadModal()">📤 上传文件</button>
-            <button class="btn btn-primary" onclick="showCreateFolderModal()">📁 新建文件夹</button>
+    <div class="container">
+        <div class="toolbar">
+            <div class="toolbar-actions">
+                <button class="btn btn-success" onclick="showUploadModal()">
+                    📤 上传文件
+                </button>
+                <button class="btn btn-success" onclick="showCreateFolderModal()">
+                    📁 新建文件夹
+                </button>
+            </div>
+            <div class="search-box">
+                <input type="text" id="searchInput" placeholder="搜索文件..." onkeypress="if(event.key==='Enter') searchFiles()">
+                <button class="btn btn-outline" onclick="searchFiles()">🔍 搜索</button>
+            </div>
         </div>
-        <div class="search-box">
-            <input type="text" placeholder="搜索文件..." onkeypress="if(event.key==='Enter') searchFiles()">
-            <button class="btn btn-secondary" onclick="searchFiles()">🔍 搜索</button>
-        </div>
-    </div>
 
-    <div class="breadcrumb" id="breadcrumb">
-        <a href="#" onclick="navigateToFolder('root')">🏠 根目录</a>
-    </div>
+        <div class="breadcrumb" id="breadcrumb">
+            <a href="#" onclick="navigateToFolder('root')">🏠 根目录</a>
+        </div>
 
-    <div class="file-list" id="fileList">
-        <!-- 文件列表将通过JavaScript动态生成 -->
-    </div>
-</div>
-
-<!-- 上传模态框 -->
-<div id="uploadModal" class="modal">
-    <div class="modal-content">
-        <div class="modal-header">
-            <h3>上传文件</h3>
-            <span class="close" onclick="closeUploadModal()">&times;</span>
-        </div>
-        <div class="upload-area" id="uploadArea">
-            <p>拖拽文件到这里或点击选择文件</p>
-            <input type="file" id="modalFileInput" multiple>
-        </div>
-        <div class="progress-bar" id="progressBar">
-            <div class="progress-fill" id="progressFill"></div>
-        </div>
-    </div>
-</div>
-
-<!-- 创建文件夹模态框 -->
-<div id="createFolderModal" class="modal">
-    <div class="modal-content">
-        <div class="modal-header">
-            <h3>新建文件夹</h3>
-            <span class="close" onclick="closeCreateFolderModal()">&times;</span>
-        </div>
-        <div>
-            <label for="folderNameInput">文件夹名称:</label>
-            <input type="text" id="folderNameInput" placeholder="请输入文件夹名称" style="width: 100%; padding: 0.5rem; margin: 0.5rem 0; border: 1px solid #ccc; border-radius: 4px;">
-            <div style="text-align: right; margin-top: 1rem;">
-                <button class="btn btn-secondary" onclick="closeCreateFolderModal()">取消</button>
-                <button class="btn btn-primary" onclick="createFolder()">创建</button>
+        <div class="file-list" id="fileList">
+            <div class="empty-state">
+                <div class="empty-state-icon">📂</div>
+                <p>加载中...</p>
             </div>
         </div>
     </div>
-</div>
 
-<script>
-    let currentFolderId = 'root';
-    let fileList = [];
+    <div id="uploadModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>📤 上传文件</h3>
+                <button class="close" onclick="closeUploadModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="upload-area" id="uploadArea">
+                    <div class="upload-icon">📁</div>
+                    <p>拖拽文件到这里或点击选择文件</p>
+                    <input type="file" id="modalFileInput" multiple>
+                </div>
+                <div class="progress-bar" id="progressBar">
+                    <div class="progress-fill" id="progressFill"></div>
+                </div>
+            </div>
+        </div>
+    </div>
 
-    // 页面加载时获取文件列表
-    document.addEventListener('DOMContentLoaded', function() {
-        loadFileList(currentFolderId);
-        setupDragAndDrop();
-    });
+    <div id="createFolderModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>📁 新建文件夹</h3>
+                <button class="close" onclick="closeCreateFolderModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="folderNameInput">文件夹名称</label>
+                    <input 
+                        type="text" 
+                        id="folderNameInput" 
+                        placeholder="请输入文件夹名称"
+                        onkeypress="if(event.key==='Enter') createFolder()"
+                    >
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline" onclick="closeCreateFolderModal()">取消</button>
+                <button class="btn btn-success" onclick="createFolder()">创建</button>
+            </div>
+        </div>
+    </div>
 
-    // 加载文件列表
-    async function loadFileList(folderId) {
-        try {
-            const response = await fetch(`/api/listFileDirByID/${folderId}`);
-            const data = await response.json();
+    <script>
+        let currentFolderId = 'root';
+        let fileList = [];
 
-            if (data.error) {
-                alert('错误: ' + data.error);
+        document.addEventListener('DOMContentLoaded', function() {
+            loadFileList(currentFolderId);
+            setupDragAndDrop();
+        });
+
+        async function loadFileList(folderId) {
+            try {
+                const response = await fetch(`/api/listFileDirByID/${folderId}`);
+                const data = await response.json();
+
+                if (data.error) {
+                    showError('加载失败: ' + data.error);
+                    return;
+                }
+
+                fileList = data.files || [];
+                renderFileList();
+            } catch (error) {
+                console.error('加载文件列表失败:', error);
+                showError('加载文件列表失败');
+            }
+        }
+
+        function renderFileList() {
+            const container = document.getElementById('fileList');
+            container.innerHTML = '';
+
+            if (fileList.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">📂</div>
+                        <p>此文件夹为空</p>
+                    </div>
+                `;
                 return;
             }
 
-            fileList = data.files || [];
-            renderFileList();
-        } catch (error) {
-            console.error('加载文件列表失败:', error);
-            alert('加载文件列表失败');
-        }
-    }
+            fileList.forEach(file => {
+                const fileItem = document.createElement('div');
+                fileItem.className = 'file-item';
 
-    // 渲染文件列表
-    function renderFileList() {
-        const container = document.getElementById('fileList');
-        container.innerHTML = '';
+                const isFolder = file.type === true;
+                const icon = isFolder ? '📁' : '📄';
+                const iconClass = isFolder ? 'folder-icon' : 'file';
 
-        fileList.forEach(file => {
-            const fileItem = document.createElement('div');
-            fileItem.className = 'file-item';
-
-            const isFolder = file.type === true;
-            const icon = isFolder ? '📁' : '📄';
-            const iconClass = isFolder ? 'folder-icon' : 'file';
-
-            fileItem.innerHTML = `
+                fileItem.innerHTML = `
                     <div class="file-icon ${iconClass}">${icon}</div>
                     <div class="file-info">
                         <div class="file-name" onclick="${isFolder ? `navigateToFolder('${file._id}')` : `previewFile('${file._id}')`}">
-                            ${file.name}
+                            ${escapeHtml(file.name)}
                         </div>
                         <div class="file-meta">
-                            权限等级: ${file.auth_level || 0} | 路径: ${file.path}
+                            权限等级: ${file.auth_level || 0} | 路径: ${escapeHtml(file.path)}
                         </div>
                     </div>
                     <div class="file-actions">
-                        ${!isFolder ? `<button class="btn btn-primary" onclick="downloadFile('${file._id}')">下载</button>` : ''}
-                        <button class="btn btn-secondary" onclick="deleteFile('${file._id}')">删除</button>
+                        ${!isFolder ? `<button class="btn btn-primary" onclick="downloadFile('${file._id}')">⬇️ 下载</button>` : ''}
+                        <button class="btn btn-danger" onclick="deleteFile('${file._id}', '${escapeHtml(file.name)}')">🗑️ 删除</button>
                     </div>
                 `;
 
-            container.appendChild(fileItem);
-        });
-
-        if (fileList.length === 0) {
-            container.innerHTML = '<div class="file-item"><div class="file-info">此文件夹为空</div></div>';
+                container.appendChild(fileItem);
+            });
         }
-    }
 
-    // 导航到文件夹
-    function navigateToFolder(folderId) {
-        currentFolderId = folderId;
-        loadFileList(folderId);
-        updateBreadcrumb(folderId);
-    }
+        function navigateToFolder(folderId) {
+            currentFolderId = folderId;
+            loadFileList(folderId);
+            updateBreadcrumb(folderId);
+        }
 
-    // 更新面包屑导航
-    function updateBreadcrumb(folderId) {
-        const breadcrumb = document.getElementById('breadcrumb');
-        // 这里可以实现更复杂的面包屑逻辑
-        breadcrumb.innerHTML = `
+        function updateBreadcrumb(folderId) {
+            const breadcrumb = document.getElementById('breadcrumb');
+            breadcrumb.innerHTML = `
                 <a href="#" onclick="navigateToFolder('root')">🏠 根目录</a>
-                ${folderId !== 'root' ? ` / <span>当前文件夹</span>` : ''}
+                ${folderId !== 'root' ? '<span class="breadcrumb-separator">/</span><span>当前文件夹</span>' : ''}
             `;
-    }
+        }
 
-    // 显示上传模态框
-    function showUploadModal() {
-        document.getElementById('uploadModal').style.display = 'block';
-    }
+        function showUploadModal() {
+            document.getElementById('uploadModal').style.display = 'block';
+        }
 
-    // 关闭上传模态框
-    function closeUploadModal() {
-        document.getElementById('uploadModal').style.display = 'none';
-        document.getElementById('progressBar').style.display = 'none';
-        document.getElementById('progressFill').style.width = '0%';
-    }
+        function closeUploadModal() {
+            document.getElementById('uploadModal').style.display = 'none';
+            document.getElementById('progressBar').style.display = 'none';
+            document.getElementById('progressFill').style.width = '0%';
+        }
 
-    // 显示创建文件夹模态框
-    function showCreateFolderModal() {
-        document.getElementById('createFolderModal').style.display = 'block';
-    }
+        function showCreateFolderModal() {
+            document.getElementById('createFolderModal').style.display = 'block';
+            document.getElementById('folderNameInput').focus();
+        }
 
-    // 关闭创建文件夹模态框
-    function closeCreateFolderModal() {
-        document.getElementById('createFolderModal').style.display = 'none';
-    }
+        function closeCreateFolderModal() {
+            document.getElementById('createFolderModal').style.display = 'none';
+            document.getElementById('folderNameInput').value = '';
+        }
 
-    // 设置拖拽上传
-    function setupDragAndDrop() {
-        const uploadArea = document.getElementById('uploadArea');
+        function setupDragAndDrop() {
+            const uploadArea = document.getElementById('uploadArea');
 
-        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-            uploadArea.addEventListener(eventName, preventDefaults, false);
-            document.body.addEventListener(eventName, preventDefaults, false);
-        });
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                uploadArea.addEventListener(eventName, preventDefaults, false);
+                document.body.addEventListener(eventName, preventDefaults, false);
+            });
 
-        ['dragenter', 'dragover'].forEach(eventName => {
-            uploadArea.addEventListener(eventName, highlight, false);
-        });
+            ['dragenter', 'dragover'].forEach(eventName => {
+                uploadArea.addEventListener(eventName, () => uploadArea.classList.add('dragover'), false);
+            });
 
-        ['dragleave', 'drop'].forEach(eventName => {
-            uploadArea.addEventListener(eventName, unhighlight, false);
-        });
+            ['dragleave', 'drop'].forEach(eventName => {
+                uploadArea.addEventListener(eventName, () => uploadArea.classList.remove('dragover'), false);
+            });
 
-        uploadArea.addEventListener('drop', handleDrop, false);
-        uploadArea.addEventListener('click', () => {
-            document.getElementById('modalFileInput').click();
-        });
+            uploadArea.addEventListener('drop', handleDrop, false);
+            uploadArea.addEventListener('click', () => {
+                document.getElementById('modalFileInput').click();
+            });
 
-        document.getElementById('modalFileInput').addEventListener('change', function() {
-            uploadFiles(this.files);
-        });
-    }
+            document.getElementById('modalFileInput').addEventListener('change', function() {
+                uploadFiles(this.files);
+            });
+        }
 
-    function preventDefaults(e) {
-        e.preventDefault();
-        e.stopPropagation();
-    }
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
 
-    function highlight(e) {
-        document.getElementById('uploadArea').classList.add('dragover');
-    }
+        function handleDrop(e) {
+            const dt = e.dataTransfer;
+            const files = dt.files;
+            uploadFiles(files);
+        }
 
-    function unhighlight(e) {
-        document.getElementById('uploadArea').classList.remove('dragover');
-    }
+        async function uploadFiles(files) {
+            if (!files || files.length === 0) return;
 
-    function handleDrop(e) {
-        const dt = e.dataTransfer;
-        const files = dt.files;
-        uploadFiles(files);
-    }
+            const progressBar = document.getElementById('progressBar');
+            const progressFill = document.getElementById('progressFill');
 
-    // 上传文件
-    async function uploadFiles(files) {
-        if (!files || files.length === 0) return;
+            progressBar.style.display = 'block';
 
-        const progressBar = document.getElementById('progressBar');
-        const progressFill = document.getElementById('progressFill');
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                const formData = new FormData();
+                formData.append('file', file);
 
-        progressBar.style.display = 'block';
+                try {
+                    const response = await fetch(`/api/updateFile/${currentFolderId}`, {
+                        method: 'POST',
+                        body: formData
+                    });
 
-        for (let i = 0; i < files.length; i++) {
-            const file = files[i];
-            const formData = new FormData();
-            formData.append('file', file);
+                    const result = await response.json();
+
+                    if (result.error) {
+                        console.error(`上传 ${file.name} 失败:`, result.error);
+                    }
+
+                    const progress = ((i + 1) / files.length) * 100;
+                    progressFill.style.width = progress + '%';
+
+                } catch (error) {
+                    console.error(`上传 ${file.name} 失败:`, error);
+                }
+            }
+
+            setTimeout(() => {
+                closeUploadModal();
+                loadFileList(currentFolderId);
+            }, 1000);
+        }
+
+        async function downloadFile(fileId) {
+            try {
+                const downloadUrl = `/api/downloadFile/${fileId}`;
+                const link = document.createElement('a');
+                link.href = downloadUrl;
+                link.download = '';
+                link.style.display = 'none';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            } catch (error) {
+                console.error('下载失败:', error);
+                showError('下载失败');
+            }
+        }
+
+        function previewFile(fileId) {
+            try {
+                window.open(`/api/downloadFile/${fileId}`, '_blank');
+            } catch (error) {
+                console.error('预览失败:', error);
+                showError('预览失败');
+            }
+        }
+
+        async function deleteFile(fileId, fileName) {
+            if (!confirm(`确定要删除 "${fileName}" 吗？`)) return;
 
             try {
-                const response = await fetch(`/api/updateFile/${currentFolderId}`, {
+                const response = await fetch(`/api/deleteFile/${fileId}`, {
+                    method: 'DELETE'
+                });
+
+                const result = await response.json();
+
+                if (result.error) {
+                    showError('删除失败: ' + result.error);
+                } else {
+                    loadFileList(currentFolderId);
+                }
+            } catch (error) {
+                console.error('删除失败:', error);
+                showError('删除失败');
+            }
+        }
+
+        async function createFolder() {
+            const folderName = document.getElementById('folderNameInput').value.trim();
+
+            if (!folderName) {
+                alert('文件夹名称不能为空');
+                return;
+            }
+
+            try {
+                const formData = new FormData();
+                formData.append('addDirName', folderName);
+
+                const response = await fetch(`/api/updateDir/${currentFolderId}`, {
                     method: 'POST',
                     body: formData
                 });
@@ -497,164 +860,75 @@
                 const result = await response.json();
 
                 if (result.error) {
-                    alert(`上传 ${file.name} 失败: ${result.error}`);
+                    showError('创建文件夹失败: ' + result.error);
                 } else {
-                    console.log(`${file.name} 上传成功`);
+                    closeCreateFolderModal();
+                    loadFileList(currentFolderId);
                 }
-
-                // 更新进度条
-                const progress = ((i + 1) / files.length) * 100;
-                progressFill.style.width = progress + '%';
-
             } catch (error) {
-                console.error(`上传 ${file.name} 失败:`, error);
-                alert(`上传 ${file.name} 失败`);
+                console.error('创建文件夹失败:', error);
+                showError('创建文件夹失败');
             }
         }
 
-        // 上传完成后刷新文件列表
-        setTimeout(() => {
-            closeUploadModal();
-            loadFileList(currentFolderId);
-        }, 1000);
-    }
+        async function searchFiles() {
+            const searchInput = document.getElementById('searchInput');
+            const searchTerm = searchInput.value.trim();
 
-    // 下载文件
-    async function downloadFile(fileId) {
-        try {
-            // 创建一个隐藏的下载链接
-            const downloadUrl = `/api/downloadFile/${fileId}`;
-            const link = document.createElement('a');
-            link.href = downloadUrl;
-            link.download = ''; // 强制下载而不是预览
-            link.style.display = 'none';
-
-            // 添加到页面并触发点击
-            document.body.appendChild(link);
-            link.click();
-
-            // 清理
-            document.body.removeChild(link);
-        } catch (error) {
-            console.error('下载失败:', error);
-            alert('下载失败');
-        }
-    }
-
-    // 预览文件
-    function previewFile(fileId) {
-        try {
-            // 在新窗口中预览文件
-            window.open(`/api/downloadFile/${fileId}`, '_blank');
-        } catch (error) {
-            console.error('预览失败:', error);
-            alert('预览失败');
-        }
-    }
-
-    // 删除文件
-    async function deleteFile(fileId) {
-        if (!confirm('确定要删除这个文件吗？')) return;
-
-        try {
-            const response = await fetch(`/api/deleteFile/${fileId}`, {
-                method: 'DELETE'
-            });
-
-            const result = await response.json();
-
-            if (result.error) {
-                alert('删除失败: ' + result.error);
-            } else {
-                alert('删除成功: ' + result.name);
-                // 刷新当前文件列表
-                loadFileList(currentFolderId);
-            }
-        } catch (error) {
-            console.error('删除失败:', error);
-            alert('删除失败');
-        }
-    }
-
-    // 创建文件��
-    async function createFolder() {
-        const folderName = document.getElementById('folderNameInput').value.trim();
-
-        if (!folderName) {
-            alert('文件夹名称不能为空');
-            return;
-        }
-
-        try {
-            const formData = new FormData();
-            formData.append('addDirName', folderName);
-
-            const response = await fetch(`/api/updateDir/${currentFolderId}`, {
-                method: 'POST',
-                body: formData
-            });
-
-            const result = await response.json();
-
-            if (result.error) {
-                alert('创建文件夹失败: ' + result.error);
-            } else {
-                alert('文件夹创建成功');
-                document.getElementById('folderNameInput').value = '';
-                closeCreateFolderModal();
-                loadFileList(currentFolderId);
-            }
-        } catch (error) {
-            console.error('创建文件夹失败:', error);
-            alert('创建文件夹失败');
-        }
-    }
-
-    // 搜索文件
-    async function searchFiles() {
-        const searchInput = document.querySelector('.search-box input');
-        const searchTerm = searchInput.value.trim();
-
-        if (!searchTerm) {
-            alert('请输入搜索关键词');
-            return;
-        }
-
-        try {
-            const response = await fetch(`/api/searchFiles?q=${encodeURIComponent(searchTerm)}`);
-            const data = await response.json();
-
-            if (data.error) {
-                alert('搜索失败: ' + data.error);
+            if (!searchTerm) {
+                alert('请输入搜索关键词');
                 return;
             }
 
-            fileList = data.files || [];
-            renderFileList();
+            try {
+                const response = await fetch(`/api/searchFiles?q=${encodeURIComponent(searchTerm)}`);
+                const data = await response.json();
 
-            // 更新面包屑显示搜索结果
-            const breadcrumb = document.getElementById('breadcrumb');
-            breadcrumb.innerHTML = `
-                <a href="#" onclick="navigateToFolder('root')">🏠 根目录</a>
-                / <span>搜索结果: "${searchTerm}"</span>
-            `;
+                if (data.error) {
+                    showError('搜索失败: ' + data.error);
+                    return;
+                }
 
-        } catch (error) {
-            console.error('搜索失败:', error);
-            alert('搜索失败');
+                fileList = data.files || [];
+                renderFileList();
+
+                const breadcrumb = document.getElementById('breadcrumb');
+                breadcrumb.innerHTML = `
+                    <a href="#" onclick="navigateToFolder('root')">🏠 根目录</a>
+                    <span class="breadcrumb-separator">/</span>
+                    <span>搜索结果: "${escapeHtml(searchTerm)}"</span>
+                `;
+
+            } catch (error) {
+                console.error('搜索失败:', error);
+                showError('搜索失败');
+            }
         }
-    }
 
-    // 点击模态框外部关闭
-    window.onclick = function(event) {
-        const uploadModal = document.getElementById('uploadModal');
-        const createFolderModal = document.getElementById('createFolderModal');
-        if (event.target === uploadModal) {
-            closeUploadModal();
-        } else if (event.target === createFolderModal) {
-            closeCreateFolderModal();
+        function showError(message) {
+            alert(message);
         }
-    }
-</script>
+
+        function escapeHtml(text) {
+            const map = {
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#039;'
+            };
+            return text.replace(/[&<>"']/g, m => map[m]);
+        }
+
+        window.onclick = function(event) {
+            const uploadModal = document.getElementById('uploadModal');
+            const createFolderModal = document.getElementById('createFolderModal');
+            if (event.target === uploadModal) {
+                closeUploadModal();
+            } else if (event.target === createFolderModal) {
+                closeCreateFolderModal();
+            }
+        }
+    </script>
 </body>
 </html>

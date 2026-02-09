@@ -56,3 +56,4 @@ FileStore/
 # Build output
 dist/
 build/
+/node_modules/

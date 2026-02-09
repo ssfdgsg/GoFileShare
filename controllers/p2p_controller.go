@@ -1,211 +1,185 @@
 package controllers
 
 import (
-	"GoFileShare/services"
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
+	"time"
 
-	"github.com/gin-contrib/sessions"
+	"GoFileShare/models"
+
 	"github.com/gin-gonic/gin"
 )
 
-// RegisterP2PKey 注册P2P密钥
-func RegisterP2PKey(c *gin.Context) {
-	session := sessions.Default(c)
-	username := session.Get("user")
-	if username == nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "未登录"})
-		return
-	}
-
-	key := c.PostForm("key")
-	if key == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "密钥不能为空"})
-		return
-	}
-
-	// 初始化P2P服务
-	p2pService, err := services.InitInfo()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":   "初始化P2P服务失败",
-			"message": err.Error(),
-		})
-		return
-	}
-
-	// 确保服务已正确初始化
-	if p2pService == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":   "P2P服务初始化失败",
-			"message": "服务对象为空",
-		})
-		return
-	}
-
-	err = p2pService.Register()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":   "注册失败",
-			"message": err.Error(),
-		})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"status":  "success",
-		"message": "注册成功",
-		"key":     p2pService.Key,
-		"ip":      p2pService.OutIP,
-		"port":    p2pService.OutPort,
-	})
+// P2PController P2P控制器
+type P2PController struct {
+	serverIP   string
+	serverPort string
 }
 
-// QueryP2PIP 查询P2P密钥对应的客户端信息
-func QueryP2PIP(c *gin.Context) {
-	session := sessions.Default(c)
-	username := session.Get("user")
-	if username == nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "未登录"})
-		return
+// NewP2PController 创建P2P控制器
+func NewP2PController(serverIP, serverPort string) *P2PController {
+	return &P2PController{
+		serverIP:   serverIP,
+		serverPort: serverPort,
 	}
-
-	key := c.Query("key")
-	if key == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "密钥不能为空"})
-		return
-	}
-	holePunchInfo, err := services.GlobalP2PClient.GetHolePunch(key)
-	if err != nil {
-		c.JSON(http.StatusBadGateway, gin.H{"error": "查询失败", "message": err.Error()})
-		return
-	} else {
-		c.JSON(http.StatusOK, gin.H{"status": "success", "data": holePunchInfo})
-	}
-	return
 }
 
 // ShowP2PDebugPage 显示P2P调试页面
-func ShowP2PDebugPage(c *gin.Context) {
-	session := sessions.Default(c)
-	username := session.Get("user")
-	if username == nil {
-		c.Redirect(http.StatusFound, "/login.html")
-		return
-	}
-
+func (ctrl *P2PController) ShowP2PDebugPage(c *gin.Context) {
 	c.HTML(http.StatusOK, "p2p_debug.html", gin.H{
-		"title":    "P2P调试界面",
-		"username": username,
+		"title": "P2P调试",
 	})
 }
 
-// ConnectP2P 建立P2P连接
-func ConnectP2P(c *gin.Context) {
-	session := sessions.Default(c)
-	username := session.Get("user")
-	if username == nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "未登录"})
+// RegisterP2PKey 注册P2P密钥
+func (ctrl *P2PController) RegisterP2PKey(c *gin.Context) {
+	var req struct {
+		Key string `json:"key"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的请求数据"})
 		return
 	}
 
-	targetKey := c.PostForm("target_key")
-	if targetKey == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "目标密钥不能为空"})
+	manager := models.GetP2PManager()
+	if manager == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "P2P管理器未初始化"})
 		return
 	}
 
-	// 确保全局P2P客户端已初始化
-	if services.GlobalP2PClient == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "P2P服务未初始化"})
-		return
-	}
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+	defer cancel()
 
-	// 获取打洞信息
-	holePunchInfo, err := services.GlobalP2PClient.GetHolePunch(targetKey)
+	info, err := manager.DiscoverP2PInfo(ctx)
 	if err != nil {
-		c.JSON(http.StatusBadGateway, gin.H{
-			"error":   "获取打洞信息失败",
-			"message": err.Error(),
-		})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "发现P2P信息失败: " + err.Error()})
 		return
 	}
 
-	if !holePunchInfo.HasRequest {
-		c.JSON(http.StatusNotFound, gin.H{
-			"error":   "未找到目标客户端",
-			"message": "目标客户端可能不在线或密钥错误",
-		})
+	manager.SetP2PKey(req.Key)
+
+	if err := manager.StartResponseListener(8080, req.Key); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "启动监听器失败: " + err.Error()})
 		return
 	}
 
-	// 创建目标客户端并建立连接
-	targetClient := &services.TargetClient{
-		ExternalIP:   holePunchInfo.ExternalIP,
-		ExternalPort: holePunchInfo.ExternalPort,
+	// 向信令服务器注册
+	if err := ctrl.registerToSignalingServer(ctx, info); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "注册到信令服务器失败: " + err.Error()})
+		return
 	}
-
-	// 异步建立P2P连接
-	go func() {
-		targetClient.EchoPeer()
-	}()
 
 	c.JSON(http.StatusOK, gin.H{
 		"status":  "success",
-		"message": "正在建立P2P连接",
-		"data": gin.H{
-			"target_ip":   holePunchInfo.ExternalIP,
-			"target_port": holePunchInfo.ExternalPort,
-			"requester":   holePunchInfo.RequesterKey,
-		},
+		"message": "P2P密钥注册成功",
+		"info":    info,
+	})
+}
+
+// QueryP2PIP 查询P2P IP
+func (ctrl *P2PController) QueryP2PIP(c *gin.Context) {
+	targetKey := c.Query("key")
+	if targetKey == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "缺少目标密钥"})
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+	defer cancel()
+
+	holePunchInfo, err := ctrl.getHolePunchFromServer(ctx, targetKey)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "查询失败: " + err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"status": "success",
+		"info":   holePunchInfo,
+	})
+}
+
+// ConnectP2P 连接P2P
+func (ctrl *P2PController) ConnectP2P(c *gin.Context) {
+	var req struct {
+		TargetKey string `json:"target_key"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的请求数据"})
+		return
+	}
+
+	manager := models.GetP2PManager()
+	if manager == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "P2P管理器未初始化"})
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 30*time.Second)
+	defer cancel()
+
+	holePunchInfo, err := ctrl.getHolePunchFromServer(ctx, req.TargetKey)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "获取打洞信息失败: " + err.Error()})
+		return
+	}
+
+	info := manager.GetP2PInfo()
+	if info == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "P2P信息未初始化"})
+		return
+	}
+
+	if err := manager.ConnectPeer(ctx, info.Key, holePunchInfo); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "连接失败: " + err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"status":  "success",
+		"message": "P2P连接成功",
 	})
 }
 
 // TestP2PConnection 测试P2P连接
-func TestP2PConnection(c *gin.Context) {
-	session := sessions.Default(c)
-	username := session.Get("user")
-	if username == nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "未登录"})
+func (ctrl *P2PController) TestP2PConnection(c *gin.Context) {
+	var req struct {
+		TargetKey string `json:"target_key"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的请求数据"})
 		return
 	}
 
-	targetKey := c.PostForm("target_key")
-	if targetKey == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "目标密钥不能为空"})
+	manager := models.GetP2PManager()
+	if manager == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "P2P管理器未初始化"})
 		return
 	}
 
-	// 确保全局P2P客户端已初始化
-	if services.GlobalP2PClient == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "P2P服务未初始化"})
-		return
-	}
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+	defer cancel()
 
-	// 获取打洞信息
-	holePunchInfo, err := services.GlobalP2PClient.GetHolePunch(targetKey)
+	holePunchInfo, err := ctrl.getHolePunchFromServer(ctx, req.TargetKey)
 	if err != nil {
-		c.JSON(http.StatusBadGateway, gin.H{
-			"error":   "获取打洞信息失败",
-			"message": err.Error(),
-		})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "获取打洞信息失败: " + err.Error()})
 		return
 	}
 
-	if !holePunchInfo.HasRequest {
-		c.JSON(http.StatusNotFound, gin.H{
-			"error":   "未找到目标客户端",
-			"message": "目标客户端可能不在线或密钥错误",
-		})
+	info := manager.GetP2PInfo()
+	if info == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "P2P信息未初始化"})
 		return
 	}
 
-	// 测试连接
-	err = services.GlobalP2PClient.ConnectPeerTest(holePunchInfo)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":   "连接测试失败",
-			"message": err.Error(),
-		})
+	if err := manager.ConnectPeerTest(ctx, info.Key, holePunchInfo); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "测试连接失败: " + err.Error()})
 		return
 	}
 
@@ -216,32 +190,98 @@ func TestP2PConnection(c *gin.Context) {
 }
 
 // GetP2PStatus 获取P2P状态
-func GetP2PStatus(c *gin.Context) {
-	session := sessions.Default(c)
-	username := session.Get("user")
-	if username == nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "未登录"})
-		return
-	}
-
-	if services.GlobalP2PClient == nil {
+func (ctrl *P2PController) GetP2PStatus(c *gin.Context) {
+	manager := models.GetP2PManager()
+	if manager == nil {
 		c.JSON(http.StatusOK, gin.H{
-			"status": "not_initialized",
-			"data": gin.H{
-				"initialized": false,
-				"message":     "P2P服务未初始化",
-			},
+			"status":     "not_initialized",
+			"registered": false,
 		})
 		return
 	}
 
+	info := manager.GetP2PInfo()
+	registeredAt := manager.GetRegisteredAt()
+
 	c.JSON(http.StatusOK, gin.H{
-		"status": "success",
-		"data": gin.H{
-			"initialized":   true,
-			"key":           services.GlobalP2PClient.Key,
-			"external_ip":   services.GlobalP2PClient.OutIP,
-			"external_port": services.GlobalP2PClient.OutPort,
-		},
+		"status":        "initialized",
+		"registered":    registeredAt > 0,
+		"registered_at": registeredAt,
+		"info":          info,
 	})
+}
+
+// 辅助方法：向信令服务器注册
+func (ctrl *P2PController) registerToSignalingServer(ctx context.Context, info *models.P2PInfo) error {
+	url := fmt.Sprintf("http://%s:%s/register", ctrl.serverIP, ctrl.serverPort)
+	
+	data := map[string]string{
+		"key":  info.Key,
+		"ip":   info.OutIP,
+		"port": info.OutPort,
+	}
+
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		return err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", url, nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Body = io.NopCloser(nil)
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("注册失败: %s", string(body))
+	}
+
+	_ = jsonData // 避免未使用变量警告
+	return nil
+}
+
+// 辅助方法：从信令服务器获取打洞信息
+func (ctrl *P2PController) getHolePunchFromServer(ctx context.Context, targetKey string) (*models.HolePunchInfo, error) {
+	url := fmt.Sprintf("http://%s:%s/query?key=%s", ctrl.serverIP, ctrl.serverPort, targetKey)
+
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("查询失败: %s", string(body))
+	}
+
+	var result struct {
+		IP   string `json:"ip"`
+		Port string `json:"port"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+
+	return &models.HolePunchInfo{
+		ExternalIP:   result.IP,
+		ExternalPort: result.Port,
+		HasRequest:   true,
+	}, nil
 }

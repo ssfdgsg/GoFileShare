@@ -3,147 +3,429 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>用户登录</title>
+    <title>登录 - 云端文件系统</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        body {
-            font-family: 'Microsoft YaHei', sans-serif;
-            background-color: #f5f5f5;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
+        * {
             margin: 0;
             padding: 0;
+            box-sizing: border-box;
         }
+
+        :root {
+            --primary: #6366f1;
+            --primary-dark: #4f46e5;
+            --primary-light: #818cf8;
+            --secondary: #ec4899;
+            --success: #10b981;
+            --error: #ef4444;
+            --warning: #f59e0b;
+            --dark: #0f172a;
+            --dark-light: #1e293b;
+            --gray: #64748b;
+            --gray-light: #cbd5e1;
+            --white: #ffffff;
+            --bg: #f8fafc;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        body::before {
+            content: '';
+            position: absolute;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(255,255,255,0.1) 1px, transparent 1px);
+            background-size: 50px 50px;
+            animation: moveBackground 20s linear infinite;
+        }
+
+        @keyframes moveBackground {
+            0% { transform: translate(0, 0); }
+            100% { transform: translate(50px, 50px); }
+        }
+
         .login-container {
-            background-color: white;
-            border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-            padding: 30px;
-            width: 350px;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            border-radius: 24px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            width: 100%;
+            max-width: 440px;
+            padding: 48px 40px;
+            position: relative;
+            z-index: 1;
+            animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1);
         }
-        h1 {
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .logo-section {
             text-align: center;
-            color: #4b8bf4;
-            margin-bottom: 30px;
+            margin-bottom: 40px;
         }
-        .input-group {
-            margin-bottom: 20px;
+
+        .logo {
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 20px;
+            font-size: 40px;
+            box-shadow: 0 10px 30px rgba(99, 102, 241, 0.3);
+            animation: float 3s ease-in-out infinite;
         }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+
+        h1 {
+            font-size: 28px;
+            font-weight: 700;
+            color: var(--dark);
+            margin-bottom: 8px;
+        }
+
+        .subtitle {
+            color: var(--gray);
+            font-size: 15px;
+        }
+
+        .alert {
+            padding: 14px 16px;
+            border-radius: 12px;
+            margin-bottom: 24px;
+            font-size: 14px;
+            display: none;
+            animation: slideDown 0.3s ease;
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .alert-error {
+            background: #fee2e2;
+            color: #991b1b;
+            border: 1px solid #fecaca;
+        }
+
+        .alert-success {
+            background: #d1fae5;
+            color: #065f46;
+            border: 1px solid #a7f3d0;
+        }
+
+        .form-group {
+            margin-bottom: 24px;
+        }
+
         label {
             display: block;
-            margin-bottom: 5px;
-            color: #555;
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--dark);
+            margin-bottom: 8px;
         }
-        input[type="text"], input[type="password"] {
+
+        .input-wrapper {
+            position: relative;
+        }
+
+        .input-icon {
+            position: absolute;
+            left: 16px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 20px;
+            pointer-events: none;
+        }
+
+        input {
             width: 100%;
-            padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            box-sizing: border-box;
-            font-size: 16px;
+            padding: 14px 16px 14px 48px;
+            border: 2px solid var(--gray-light);
+            border-radius: 12px;
+            font-size: 15px;
+            font-family: inherit;
+            transition: all 0.3s;
+            background: var(--white);
         }
+
+        input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1);
+        }
+
+        input::placeholder {
+            color: var(--gray-light);
+        }
+
         .btn {
-            background-color: #4b8bf4;
-            color: white;
-            border: none;
-            padding: 12px;
             width: 100%;
-            border-radius: 4px;
-            cursor: pointer;
+            padding: 16px;
+            border: none;
+            border-radius: 12px;
             font-size: 16px;
-            transition: background-color 0.3s;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-family: inherit;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
         }
-        .btn:hover {
-            background-color: #3a7ad5;
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            color: var(--white);
+            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
         }
-        .error-message {
-            color: #f44336;
+
+        .btn-primary:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(99, 102, 241, 0.5);
+        }
+
+        .btn-primary:active:not(:disabled) {
+            transform: translateY(0);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .spinner {
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-top-color: var(--white);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .divider {
             text-align: center;
-            margin-bottom: 20px;
-            display: none;
+            margin: 32px 0;
+            position: relative;
         }
-        .register-link {
+
+        .divider::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 50%;
+            width: 100%;
+            height: 1px;
+            background: var(--gray-light);
+        }
+
+        .divider span {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 0 16px;
+            color: var(--gray);
+            font-size: 14px;
+            position: relative;
+        }
+
+        .footer-link {
             text-align: center;
-            margin-top: 20px;
+            margin-top: 24px;
+            font-size: 14px;
+            color: var(--gray);
         }
-        .register-link a {
-            color: #4b8bf4;
+
+        .footer-link a {
+            color: var(--primary);
             text-decoration: none;
+            font-weight: 600;
+            transition: color 0.3s;
         }
-        .register-link a:hover {
-            text-decoration: underline;
+
+        .footer-link a:hover {
+            color: var(--primary-dark);
+        }
+
+        @media (max-width: 480px) {
+            .login-container {
+                padding: 36px 28px;
+            }
+
+            h1 {
+                font-size: 24px;
+            }
+
+            .logo {
+                width: 70px;
+                height: 70px;
+                font-size: 35px;
+            }
         }
     </style>
 </head>
 <body>
     <div class="login-container">
-        <h1>登录系统</h1>
-        <div id="error-message" class="error-message"></div>
-        <form id="login-form">
-            <div class="input-group">
+        <div class="logo-section">
+            <div class="logo">☁️</div>
+            <h1>欢迎回来</h1>
+            <p class="subtitle">登录到云端文件系统</p>
+        </div>
+
+        <div id="alert" class="alert"></div>
+
+        <form id="loginForm">
+            <div class="form-group">
                 <label for="username">用户名</label>
-                <input type="text" id="username" name="user" placeholder="请输入用户名" required>
+                <div class="input-wrapper">
+                    <span class="input-icon">👤</span>
+                    <input 
+                        type="text" 
+                        id="username" 
+                        name="user" 
+                        placeholder="输入您的用户名" 
+                        required 
+                        autocomplete="username"
+                        autofocus
+                    >
+                </div>
             </div>
-            <div class="input-group">
+
+            <div class="form-group">
                 <label for="password">密码</label>
-                <input type="password" id="password" name="password" placeholder="请输入密码" required>
+                <div class="input-wrapper">
+                    <span class="input-icon">🔒</span>
+                    <input 
+                        type="password" 
+                        id="password" 
+                        name="password" 
+                        placeholder="输入您的密码" 
+                        required
+                        autocomplete="current-password"
+                    >
+                </div>
             </div>
-            <button type="submit" class="btn">登录</button>
+
+            <button type="submit" class="btn btn-primary" id="submitBtn">
+                <span id="btnText">登录</span>
+            </button>
         </form>
-        <div class="register-link">
-            还没有账号？ <a href="/register.html">立即注册</a>
+
+        <div class="divider">
+            <span>或</span>
+        </div>
+
+        <div class="footer-link">
+            还没有账号？<a href="/register.html">立即注册</a>
         </div>
     </div>
 
     <script>
-        document.getElementById('login-form').addEventListener('submit', function(e) {
+        const form = document.getElementById('loginForm');
+        const alert = document.getElementById('alert');
+        const submitBtn = document.getElementById('submitBtn');
+        const btnText = document.getElementById('btnText');
+
+        function showAlert(message, type = 'error') {
+            alert.className = `alert alert-${type}`;
+            alert.textContent = message;
+            alert.style.display = 'block';
+            setTimeout(() => {
+                alert.style.display = 'none';
+            }, 5000);
+        }
+
+        function setLoading(loading) {
+            submitBtn.disabled = loading;
+            if (loading) {
+                btnText.innerHTML = '<div class="spinner"></div><span>登录中...</span>';
+            } else {
+                btnText.textContent = '登录';
+            }
+        }
+
+        form.addEventListener('submit', async (e) => {
             e.preventDefault();
 
-            const username = document.getElementById('username').value;
+            const username = document.getElementById('username').value.trim();
             const password = document.getElementById('password').value;
-            const errorMsg = document.getElementById('error-message');
 
-            // 简单的前端验证
             if (!username || !password) {
-                errorMsg.style.display = 'block';
-                errorMsg.textContent = '用户名和密码不能为空';
+                showAlert('请填写完整的登录信息');
                 return;
             }
 
-            const formData = new URLSearchParams();
-            formData.append('user', username);
-            formData.append('password', password);
+            setLoading(true);
 
-            // 发送请求到后端
-            fetch('/api/login', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                    'Accept': 'application/json'
-                },
-                body: formData
-            })
-            .then(response => {
-                if (response.ok) {
-                    return response.json();
-                }
-                throw new Error('登录失败');
-            })
-            .then(data => {
-                if (data.status === 'success') {
-                    // 登录成功，重定向到首页
-                    window.location.href = '/home';
+            try {
+                const formData = new URLSearchParams();
+                formData.append('user', username);
+                formData.append('password', password);
+
+                const response = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'Accept': 'application/json'
+                    },
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                if (response.ok && data.status === 'success') {
+                    showAlert('登录成功！正在跳转...', 'success');
+                    setTimeout(() => {
+                        window.location.href = '/home';
+                    }, 500);
                 } else {
-                    // 登录失败，显示错误信息
-                    errorMsg.style.display = 'block';
-                    errorMsg.textContent = data.message || '用户名或密码错误';
+                    showAlert(data.message || '用户名或密码错误');
                 }
-            })
-            .catch(error => {
-                errorMsg.style.display = 'block';
-                errorMsg.textContent = error.message;
-            });
+            } catch (error) {
+                showAlert('网络错误，请稍后重试');
+                console.error('Login error:', error);
+            } finally {
+                setLoading(false);
+            }
         });
     </script>
 </body>

@@ -10,6 +10,11 @@ import (
 	"time"
 )
 
+// FileNode 接口定义（用于权限检查）
+type FileNode interface {
+	GetAuthLevel() int
+}
+
 var DB *sql.DB
 
 // InitDB 初始化数据库连接
@@ -51,14 +56,14 @@ func InitDB() error {
 // InitTable 初始化数据库表
 func InitTable() error {
 	createTableSQL := `
-    CREATE TABLE IF NOT EXISTS user (
+    CREATE TABLE IF NOT EXISTS users (
         id INT AUTO_INCREMENT PRIMARY KEY,
-        name VARCHAR(100) NOT NULL UNIQUE,
+        username VARCHAR(100) NOT NULL UNIQUE,
         password VARCHAR(255) NOT NULL,
         email VARCHAR(255),
-        create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        last_login TIMESTAMP NULL,
-        status TINYINT(1) DEFAULT 1
+        status INT DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`
 
 	_, err := DB.Exec(createTableSQL)
@@ -72,15 +77,18 @@ func CloseDB() {
 	}
 }
 
-func AuthCheck(AuthLevel int, FileNodes []FileNode) ([]FileNode, error) {
-	var filteredNodes []FileNode
+func AuthCheck[T any](AuthLevel int, FileNodes []T) ([]T, error) {
+	var filteredNodes []T
 	for _, node := range FileNodes {
-		if node.EffectiveAuthLevel <= AuthLevel {
-			filteredNodes = append(filteredNodes, node)
+		// 使用类型断言获取AuthLevel字段
+		if v, ok := any(node).(interface{ GetAuthLevel() int }); ok {
+			if v.GetAuthLevel() <= AuthLevel {
+				filteredNodes = append(filteredNodes, node)
+			}
 		}
 	}
 	if len(filteredNodes) == 0 {
-		return nil, nil // 没有符合条件的节点
+		return nil, nil
 	}
 	return filteredNodes, nil
 }

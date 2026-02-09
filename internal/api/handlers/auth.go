@@ -1,42 +1,41 @@
-package controllers
+package handlers
 
 import (
 	"net/http"
 
-	"GoFileShare/models"
+	"GoFileShare/internal/service"
 
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
 )
 
-// AuthController 认证控制器
-type AuthController struct{}
+type AuthHandler struct {
+	userService *service.UserService
+}
 
-// NewAuthController 创建认证控制器
-func NewAuthController() *AuthController {
-	return &AuthController{}
+func NewAuthHandler(userService *service.UserService) *AuthHandler {
+	return &AuthHandler{userService: userService}
 }
 
 // ShowLoginPage 显示登录页面
-func (ctrl *AuthController) ShowLoginPage(c *gin.Context) {
+func (h *AuthHandler) ShowLoginPage(c *gin.Context) {
 	c.HTML(http.StatusOK, "login.html", gin.H{
 		"title": "用户登录",
 	})
 }
 
 // ShowRegisterPage 显示注册页面
-func (ctrl *AuthController) ShowRegisterPage(c *gin.Context) {
+func (h *AuthHandler) ShowRegisterPage(c *gin.Context) {
 	c.HTML(http.StatusOK, "register.html", gin.H{
 		"title": "用户注册",
 	})
 }
 
 // Register 用户注册
-func (ctrl *AuthController) Register(c *gin.Context) {
+func (h *AuthHandler) Register(c *gin.Context) {
 	username := c.PostForm("user")
 	password := c.PostForm("password")
 	email := c.PostForm("email")
-	
 	if username == "" || password == "" {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"status":  "error",
@@ -45,7 +44,7 @@ func (ctrl *AuthController) Register(c *gin.Context) {
 		return
 	}
 
-	exists, err := models.UserExists(c.Request.Context(), username)
+	exists, err := h.userService.UserExists(c.Request.Context(), username)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"status":  "error",
@@ -62,7 +61,7 @@ func (ctrl *AuthController) Register(c *gin.Context) {
 		return
 	}
 
-	if err := models.CreateUser(c.Request.Context(), username, password, email); err != nil {
+	if err := h.userService.CreateUser(c.Request.Context(), username, password, email); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"status":  "error",
 			"message": "用户创建失败",
@@ -76,12 +75,10 @@ func (ctrl *AuthController) Register(c *gin.Context) {
 	})
 }
 
-// Login 用户登录
-func (ctrl *AuthController) Login(c *gin.Context) {
+func (h *AuthHandler) Login(c *gin.Context) {
 	username := c.PostForm("user")
 	password := c.PostForm("password")
-	
-	valid, err := models.ValidateUser(c.Request.Context(), username, password)
+	valid, err := h.userService.ValidateUser(c.Request.Context(), username, password)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"status":  "error",
@@ -98,7 +95,7 @@ func (ctrl *AuthController) Login(c *gin.Context) {
 		return
 	}
 
-	user, err := models.GetUserByName(c.Request.Context(), username)
+	user, err := h.userService.GetUserByName(c.Request.Context(), username)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"status":  "error",
@@ -118,7 +115,7 @@ func (ctrl *AuthController) Login(c *gin.Context) {
 		return
 	}
 
-	if err := models.UpdateLastLogin(c.Request.Context(), username); err != nil {
+	if err := h.userService.UpdateLastLogin(c.Request.Context(), username); err != nil {
 		// log-only warning
 	}
 
@@ -129,7 +126,7 @@ func (ctrl *AuthController) Login(c *gin.Context) {
 }
 
 // Logout 用户注销
-func (ctrl *AuthController) Logout(c *gin.Context) {
+func (h *AuthHandler) Logout(c *gin.Context) {
 	session := sessions.Default(c)
 	session.Clear()
 	session.Save()

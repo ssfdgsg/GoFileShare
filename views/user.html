@@ -1,41 +1,259 @@
 <!DOCTYPE html>
-<html lang="en">
-
+<html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-</head>
+    <title>用户信息 - 云端文件系统</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
 
+        :root {
+            --primary: #6366f1;
+            --primary-dark: #4f46e5;
+            --secondary: #ec4899;
+            --dark: #0f172a;
+            --gray: #64748b;
+            --gray-light: #cbd5e1;
+            --white: #ffffff;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        body::before {
+            content: '';
+            position: absolute;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(255,255,255,0.1) 1px, transparent 1px);
+            background-size: 50px 50px;
+            animation: moveBackground 20s linear infinite;
+        }
+
+        @keyframes moveBackground {
+            0% { transform: translate(0, 0); }
+            100% { transform: translate(50px, 50px); }
+        }
+
+        .user-container {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            border-radius: 24px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            width: 100%;
+            max-width: 520px;
+            padding: 48px 40px;
+            text-align: center;
+            position: relative;
+            z-index: 1;
+            animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .avatar {
+            width: 120px;
+            height: 120px;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 56px;
+            margin: 0 auto 24px;
+            box-shadow: 0 10px 30px rgba(99, 102, 241, 0.3);
+            animation: float 3s ease-in-out infinite;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+
+        h1 {
+            font-size: 32px;
+            font-weight: 700;
+            color: var(--dark);
+            margin-bottom: 8px;
+        }
+
+        .subtitle {
+            color: var(--gray);
+            margin-bottom: 32px;
+            font-size: 15px;
+        }
+
+        .info-card {
+            background: #f8fafc;
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 24px;
+            text-align: left;
+        }
+
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 12px 0;
+            border-bottom: 1px solid var(--gray-light);
+        }
+
+        .info-row:last-child {
+            border-bottom: none;
+        }
+
+        .info-label {
+            color: var(--gray);
+            font-weight: 500;
+        }
+
+        .info-value {
+            color: var(--dark);
+            font-weight: 600;
+        }
+
+        .btn {
+            padding: 14px 28px;
+            border: none;
+            border-radius: 12px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-decoration: none;
+            display: inline-block;
+            margin: 8px;
+            font-family: inherit;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            color: var(--white);
+            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(99, 102, 241, 0.4);
+        }
+
+        .btn-outline {
+            background: transparent;
+            border: 2px solid var(--primary);
+            color: var(--primary);
+        }
+
+        .btn-outline:hover {
+            background: var(--primary);
+            color: var(--white);
+        }
+
+        @media (max-width: 480px) {
+            .user-container {
+                padding: 36px 28px;
+            }
+
+            h1 {
+                font-size: 28px;
+            }
+
+            .avatar {
+                width: 100px;
+                height: 100px;
+                font-size: 48px;
+            }
+        }
+    </style>
+</head>
 <body>
-    <div class="flex items-center justify-center min-h-screen">
-        <div class="bg-white p-8 rounded shadow-md w-full max-w-md">
-            <h2 class="text-2xl font-bold text-center text-blue-600 mb-6">{{.data}}</h2>
+    <div class="user-container">
+        <div class="avatar">👤</div>
+        <h1 id="username">加载中...</h1>
+        <p class="subtitle">用户信息</p>
+
+        <div class="info-card">
+            <div class="info-row">
+                <span class="info-label">用户名</span>
+                <span class="info-value" id="usernameValue">-</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">登录状态</span>
+                <span class="info-value">✅ 已登录</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">会话时间</span>
+                <span class="info-value" id="sessionTime">-</span>
+            </div>
+        </div>
+
+        <div>
+            <a href="/home" class="btn btn-primary">📁 返回主页</a>
+            <a href="/logout" class="btn btn-outline">🚪 退出登录</a>
         </div>
     </div>
-</body>
 
-<script>
-    getUserName()
-    function getUserName() {
-        // 假设从后端API获取昵称
-        fetch('/api/username')
-            .then(response => response.json())
-            .then(data => {
-                // 将用户名显示在页面上
-                document.querySelector('h2').textContent = '您的昵称 ' + (data.username || '未知');
-                // 将用户名添加到URL参数
+    <script>
+        let sessionStartTime = Date.now();
+
+        function updateSessionTime() {
+            const elapsed = Math.floor((Date.now() - sessionStartTime) / 1000);
+            const minutes = Math.floor(elapsed / 60);
+            const seconds = elapsed % 60;
+            document.getElementById('sessionTime').textContent = 
+                `${minutes} 分 ${seconds} 秒`;
+        }
+
+        async function getUserInfo() {
+            try {
+                const response = await fetch('/api/username');
+                const data = await response.json();
+                
+                const username = data.username || '未知用户';
+                document.getElementById('username').textContent = username;
+                document.getElementById('usernameValue').textContent = username;
+
                 if (data.username) {
                     const url = new URL(window.location);
                     url.searchParams.set('username', data.username);
                     window.history.replaceState({}, '', url);
                 }
-            })
-            .catch(() => {
-                document.querySelector('h2').textContent = '您的昵称 未知';
-            });
-    }
-</script>
+            } catch (error) {
+                console.error('获取用户信息失败:', error);
+                document.getElementById('username').textContent = '未知用户';
+                document.getElementById('usernameValue').textContent = '未知用户';
+            }
+        }
 
+        document.addEventListener('DOMContentLoaded', () => {
+            getUserInfo();
+            updateSessionTime();
+            setInterval(updateSessionTime, 1000);
+        });
+    </script>
+</body>
 </html>
