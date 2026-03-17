@@ -8,6 +8,7 @@ import (
 
 	"GoFileShare/config"
 	"GoFileShare/models"
+	"GoFileShare/utils"
 
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
@@ -270,6 +271,13 @@ func (ctrl *FileController) StartUpload(c *gin.Context) {
 		return
 	}
 
+	// 使用并发 MD5 校验（大文件时更快）
+	md5Hash, err := utils.MD5CheckConcurrent(filePath, 4)
+	if err != nil {
+		// 如果并发校验失败，降级到单线程
+		md5Hash = utils.MD5Check(filePath)
+	}
+
 	if err := models.AddFileNode(c.Request.Context(), filePath, fileName, false, parentID, auth); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "添加文件节点失败: " + err.Error()})
 		return
@@ -279,6 +287,7 @@ func (ctrl *FileController) StartUpload(c *gin.Context) {
 		"status":   "success",
 		"filename": fileName,
 		"message":  "文件上传成功",
+		"md5":      md5Hash,
 	})
 }
 

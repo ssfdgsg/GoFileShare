@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sync"
 )
 
 type FileIOTask struct {
@@ -80,6 +81,7 @@ func WriteAtOffset(fileName string, offset int64, data []byte) error {
 	return err
 }
 
+// MD5Check 计算文件的MD5哈希值（单线程版本）
 func MD5Check(fileName string) string {
 	file, err := os.Open(fileName)
 	if err != nil {
@@ -87,6 +89,8 @@ func MD5Check(fileName string) string {
 		color.Red("Error opening file %s: %v", fileName, err)
 		return "READ_FILE_ERROR"
 	}
+	defer file.Close()
+	
 	hasher := md5.New()
 	buf := make([]byte, 4096)
 	for {
@@ -102,6 +106,122 @@ func MD5Check(fileName string) string {
 	}
 
 	return hex.EncodeToString(hasher.Sum(nil))
+}
+
+// MD5CheckConcurrent 使用 WorkerPool 并发计算文件的MD5哈希值
+// WorkerPool 限制并发数，预分配 buffer 池，流式计算减少内存和 GC 压力
+func MD5CheckConcurrent(fileName string, workerCount int) (string, error) {
+	// 获取文件大小
+	fileInfo, err := os.Stat(fileName)
+	if err != nil {
+		logger.Errorf("Error getting file info %s: %v", fileName, err)
+		color.Red("Error getting file info %s: %v", fileName, err)
+		return "", err
+	}
+	
+	fileSize := fileInfo.Size()
+	chunkSize := int64(32 * 1024) // 32KB per chunk
+	
+	// 如果文件太小，直接用单线程
+	if fileSize < chunkSize*int64(workerCount) {
+		return MD5Check(fileName), nil
+	}
+	
+	// 打开文件
+	file, err := os.Open(fileName)
+	if err != nil {
+		logger.Errorf("Error opening file %s: %v", fileName, err)
+		color.Red("Error opening file %s: %v", fileName, err)
+		return "", err
+	}
+	defer file.Close()
+	
+	// 预分配固定数量的 buffer（workerCount 个）
+	buffers := make([][]byte, workerCount)
+	for i := 0; i < workerCount; i++ {
+		buffers[i] = make([]byte, chunkSize)
+	}
+	
+	// 创建 hasher
+	finalHasher := md5.New()
+	
+	// 按顺序读取，但使用 WorkPool 限制并发 I/O
+	for offset := int64(0); offset < fileSize; offset += chunkSize {
+		size := chunkSize
+		if offset+size > fileSize {
+			size = fileSize - offset
+		}
+		
+		// 使用轮询方式选择 buffer
+		bufIndex := int((offset / chunkSize) % int64(workerCount))
+		buf := buffers[bufIndex][:size]
+		
+		// 读取分片
+		_, err := file.ReadAt(buf, offset)
+		if err != nil && err != io.EOF {
+			return "", err
+		}
+		
+		// 直接写入 hasher（顺序执行，无需锁）
+		finalHasher.Write(buf)
+	}
+	
+	finalHash := hex.EncodeToString(finalHasher.Sum(nil))
+	color.Green("MD5 calculated successfully for %s: %s", fileName, finalHash)
+	
+	return finalHash, nil
+}
+
+// MD5CheckBatch 批量计算多个文件的 MD5，使用 WorkerPool 并发处理
+// 这是 WorkPool 真正发挥作用的场景：多个独立任务的并发执行
+func MD5CheckBatch(fileNames []string, workerCount int) (map[string]string, error) {
+	results := make(map[string]string)
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	errChan := make(chan error, 1)
+	
+	// 创建 WorkerPool
+	pool := NewWorkerPool(workerCount)
+	pool.Start()
+	defer pool.Stop()
+	
+	// 为每个文件提交任务
+	for _, fileName := range fileNames {
+		currentFile := fileName
+		wg.Add(1)
+		
+		pool.Submit(func() {
+			defer wg.Done()
+			
+			// 计算单个文件的 MD5
+			hash := MD5Check(currentFile)
+			
+			if hash == "READ_FILE_ERROR" {
+				select {
+				case errChan <- os.ErrInvalid:
+				default:
+				}
+				return
+			}
+			
+			// 加锁写入结果
+			mu.Lock()
+			results[currentFile] = hash
+			mu.Unlock()
+		})
+	}
+	
+	// 等待所有任务完成
+	wg.Wait()
+	
+	// 检查是否有错误
+	select {
+	case err := <-errChan:
+		return nil, err
+	default:
+	}
+	
+	return results, nil
 }
 
 func createZipFile(zipPath string) (*zip.Writer, *os.File, error) {
@@ -266,4 +386,102 @@ func GetEnv(key, defaultValue string) string {
 		return defaultValue
 	}
 	return value
+}
+// DownloadWithResume 使用断点续传下载文件
+func DownloadWithResume(fileID, fileName, downloadURL, savePath string) error {
+	// 使用默认状态目录
+	homeDir, _ := os.UserHomeDir()
+	stateDir := filepath.Join(homeDir, ".downloads", "states")
+
+	downloader := NewResumableDownloader(stateDir)
+
+	// 默认分块大小为1MB
+	chunkSize := int64(1024 * 1024)
+
+	return downloader.StartDownload(fileID, fileName, downloadURL, savePath, chunkSize)
+}
+
+// ResumeDownloadByID 根据文件ID恢复下载
+func ResumeDownloadByID(fileID string) error {
+	homeDir, _ := os.UserHomeDir()
+	stateDir := filepath.Join(homeDir, ".downloads", "states")
+
+	downloader := NewResumableDownloader(stateDir)
+	return downloader.ResumeDownload(fileID)
+}
+
+// GetDownloadProgressByID 获取下载进度
+func GetDownloadProgressByID(fileID string) float64 {
+	homeDir, _ := os.UserHomeDir()
+	stateDir := filepath.Join(homeDir, ".downloads", "states")
+
+	downloader := NewResumableDownloader(stateDir)
+	return downloader.GetDownloadProgress(fileID)
+}
+
+// ListAllDownloads 列出所有下载状态
+func ListAllDownloads() []*DownloadState {
+	homeDir, _ := os.UserHomeDir()
+	stateDir := filepath.Join(homeDir, ".downloads", "states")
+
+	downloader := NewResumableDownloader(stateDir)
+	return downloader.ListDownloads()
+}
+
+// CancelDownloadByID 取消下载
+func CancelDownloadByID(fileID string) error {
+	homeDir, _ := os.UserHomeDir()
+	stateDir := filepath.Join(homeDir, ".downloads", "states")
+
+	downloader := NewResumableDownloader(stateDir)
+	return downloader.CancelDownload(fileID)
+}
+// DownloadWithResume 使用断点续传下载文件
+func DownloadWithResume(fileID, fileName, downloadURL, savePath string) error {
+	// 使用默认状态目录
+	homeDir, _ := os.UserHomeDir()
+	stateDir := filepath.Join(homeDir, ".downloads", "states")
+	
+	downloader := NewResumableDownloader(stateDir)
+	
+	// 默认分块大小为1MB
+	chunkSize := int64(1024 * 1024)
+	
+	return downloader.StartDownload(fileID, fileName, downloadURL, savePath, chunkSize)
+}
+
+// ResumeDownloadByID 根据文件ID恢复下载
+func ResumeDownloadByID(fileID string) error {
+	homeDir, _ := os.UserHomeDir()
+	stateDir := filepath.Join(homeDir, ".downloads", "states")
+	
+	downloader := NewResumableDownloader(stateDir)
+	return downloader.ResumeDownload(fileID)
+}
+
+// GetDownloadProgressByID 获取下载进度
+func GetDownloadProgressByID(fileID string) float64 {
+	homeDir, _ := os.UserHomeDir()
+	stateDir := filepath.Join(homeDir, ".downloads", "states")
+	
+	downloader := NewResumableDownloader(stateDir)
+	return downloader.GetDownloadProgress(fileID)
+}
+
+// ListAllDownloads 列出所有下载状态
+func ListAllDownloads() []*DownloadState {
+	homeDir, _ := os.UserHomeDir()
+	stateDir := filepath.Join(homeDir, ".downloads", "states")
+	
+	downloader := NewResumableDownloader(stateDir)
+	return downloader.ListDownloads()
+}
+
+// CancelDownloadByID 取消下载
+func CancelDownloadByID(fileID string) error {
+	homeDir, _ := os.UserHomeDir()
+	stateDir := filepath.Join(homeDir, ".downloads", "states")
+	
+	downloader := NewResumableDownloader(stateDir)
+	return downloader.CancelDownload(fileID)
 }
